@@ -28,12 +28,18 @@ def simulate_dag(d, s0, graph_type):
     def _random_permutation(M):
         # np.random.permutation permutes first axis only
         P = np.random.permutation(np.eye(M.shape[0]))
+        # fangfu: P is a permutation matrix, not a permutation vector
+        # fangfu: the return is the matrix after permutation
         return P.T @ M @ P
+        
 
     def _random_acyclic_orientation(B_und):
+        """fangfu: orient the edges of an undirected graph."""
+        # fangfu: 生成下三角矩阵
         return np.tril(_random_permutation(B_und), k=-1)
 
     def _graph_to_adjmat(G):
+        # fangfu: 将图转化为邻接矩阵
         return np.array(G.get_adjacency().data)
 
     if graph_type == 'ER':
