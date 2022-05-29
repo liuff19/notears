@@ -10,7 +10,7 @@ def set_random_seed(seed):
 
 
 def is_dag(W):
-    G = ig.Graph.Weighted_Adjacency(W.tolist())
+    G = ig.Graph.Weighted_Adjacency(W.tolist()) # tolist()是将矩阵转化为列表，ig.
     return G.is_dag()
 
 
@@ -204,12 +204,12 @@ def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None):
     return X
 
 
-def count_accuracy(B_true, B_est):
+def count_accuracy(B_true, B_est): # B_est是预测的结果
     """Compute various accuracy metrics for B_est.
 
-    true positive = predicted association exists in condition in correct direction
-    reverse = predicted association exists in condition in opposite direction
-    false positive = predicted association does not exist in condition
+    true positive = predicted association exists in condition in correct direction # TP
+    reverse = predicted association exists in condition in opposite direction 
+    false positive = predicted association does not exist in condition # FN
 
     Args:
         B_true (np.ndarray): [d, d] ground truth graph, {0, 1}
@@ -220,30 +220,31 @@ def count_accuracy(B_true, B_est):
         tpr: (true positive) / condition positive
         fpr: (reverse + false positive) / condition negative
         shd: undirected extra + undirected missing + reverse
-        nnz: prediction positive
+        nnz: prediction positive # non-zero
     """
-    if (B_est == -1).any():  # cpdag
-        if not ((B_est == 0) | (B_est == 1) | (B_est == -1)).all():
+    
+    if (B_est == -1).any():  # cpdag .any()的意思：查看是否有-1，有的话返回true， B_est的维度是[d, d]
+        if not ((B_est == 0) | (B_est == 1) | (B_est == -1)).all(): # 如果B_est中有其他的值，那么就报错
             raise ValueError('B_est should take value in {0,1,-1}')
-        if ((B_est == -1) & (B_est.T == -1)).any():
+        if ((B_est == -1) & (B_est.T == -1)).any(): 
             raise ValueError('undirected edge should only appear once')
-    else:  # dag
+    else:  # dag  
         if not ((B_est == 0) | (B_est == 1)).all():
             raise ValueError('B_est should take value in {0,1}')
         if not is_dag(B_est):
             raise ValueError('B_est should be a DAG')
-    d = B_true.shape[0]
-    # linear index of nonzeros
-    pred_und = np.flatnonzero(B_est == -1)
-    pred = np.flatnonzero(B_est == 1)
-    cond = np.flatnonzero(B_true)
-    cond_reversed = np.flatnonzero(B_true.T)
-    cond_skeleton = np.concatenate([cond, cond_reversed])
+    d = B_true.shape[0] # d是结果的维度
+    # linear index of nonzeros 
+    pred_und = np.flatnonzero(B_est == -1) # pred_und是预测的结果中的-1的索引 
+    pred = np.flatnonzero(B_est == 1)      # pred是预测的结果中的1的索引
+    cond = np.flatnonzero(B_true)          # cond是真实的结果中的1的索引
+    cond_reversed = np.flatnonzero(B_true.T) # cond_reversed是真实的结果中的-1的索引
+    cond_skeleton = np.concatenate([cond, cond_reversed]) # cond_skeleton是真实的结果中的1和-1的索引
     # true pos
-    true_pos = np.intersect1d(pred, cond, assume_unique=True)
+    true_pos = np.intersect1d(pred, cond, assume_unique=True) 
     # treat undirected edge favorably
-    true_pos_und = np.intersect1d(pred_und, cond_skeleton, assume_unique=True)
-    true_pos = np.concatenate([true_pos, true_pos_und])
+    true_pos_und = np.intersect1d(pred_und, cond_skeleton, assume_unique=True) 
+    true_pos = np.concatenate([true_pos, true_pos_und]) 
     # false pos
     false_pos = np.setdiff1d(pred, cond_skeleton, assume_unique=True)
     false_pos_und = np.setdiff1d(pred_und, cond_skeleton, assume_unique=True)
