@@ -246,12 +246,12 @@ def count_accuracy(B_true, B_est): # B_est是预测的结果
     true_pos_und = np.intersect1d(pred_und, cond_skeleton, assume_unique=True) 
     true_pos = np.concatenate([true_pos, true_pos_und]) 
     # false pos
-    false_pos = np.setdiff1d(pred, cond_skeleton, assume_unique=True)
+    false_pos = np.setdiff1d(pred, cond_skeleton, assume_unique=True) # false_pos是预测的结果中的1和-1的索引，但是不在真实的结果中
     false_pos_und = np.setdiff1d(pred_und, cond_skeleton, assume_unique=True)
     false_pos = np.concatenate([false_pos, false_pos_und])
     # reverse
-    extra = np.setdiff1d(pred, cond, assume_unique=True)
-    reverse = np.intersect1d(extra, cond_reversed, assume_unique=True)
+    extra = np.setdiff1d(pred, cond, assume_unique=True) # extra是预测的结果中的1的索引，但是不在真实的结果中
+    reverse = np.intersect1d(extra, cond_reversed, assume_unique=True) # reverse是预测的结果中的1和-1的索引，但是在真实的结果中
     # compute ratio
     pred_size = len(pred) + len(pred_und)
     cond_neg_size = 0.5 * d * (d - 1) - len(cond)
