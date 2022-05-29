@@ -253,8 +253,8 @@ def count_accuracy(B_true, B_est): # B_est是预测的结果
     extra = np.setdiff1d(pred, cond, assume_unique=True) # extra是预测的结果中的1的索引，但是不在真实的结果中
     reverse = np.intersect1d(extra, cond_reversed, assume_unique=True) # reverse是预测的结果中的1和-1的索引，但是在真实的结果中
     # compute ratio
-    pred_size = len(pred) + len(pred_und)
-    cond_neg_size = 0.5 * d * (d - 1) - len(cond)
+    pred_size = len(pred) + len(pred_und) # pred_size是预测的结果中的1和-1的索引的个数
+    cond_neg_size = 0.5 * d * (d - 1) - len(cond) # cond_neg_size是计算
     fdr = float(len(reverse) + len(false_pos)) / max(pred_size, 1)
     tpr = float(len(true_pos)) / max(len(cond), 1)
     fpr = float(len(reverse) + len(false_pos)) / max(cond_neg_size, 1)

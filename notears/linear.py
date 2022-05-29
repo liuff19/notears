@@ -2,7 +2,7 @@ import numpy as np
 import scipy.linalg as slin
 import scipy.optimize as sopt
 from scipy.special import expit as sigmoid
-
+import matplotlib.pyplot as plt
 
 def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3):
     """Solve min_W L(W; X) + lambda1 ‖W‖_1 s.t. h(W) = 0 using augmented Lagrangian.
@@ -22,11 +22,12 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
     def _loss(W):
         """Evaluate value and gradient of loss."""
         """定义损失函数并且计算损失函数的值和梯度"""
-        M = X @ W
+        M = X @ W # M是X矩阵和W矩阵的乘积，X是样本矩阵，W是权重矩阵，X的维度是[n, d]，W的维度是[d, d]，M的维度是[n, d]
         if loss_type == 'l2':
             R = X - M
             loss = 0.5 / X.shape[0] * (R ** 2).sum()
-            G_loss = - 1.0 / X.shape[0] * X.T @ R
+            G_loss = - 1.0 / X.shape[0] * X.T @ R #G_loss是损失函数的梯度
+
         elif loss_type == 'logistic':
             loss = 1.0 / X.shape[0] * (np.logaddexp(0, M) - X * M).sum()
             G_loss = 1.0 / X.shape[0] * X.T @ (sigmoid(M) - X)
@@ -71,7 +72,6 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
     for _ in range(max_iter): 
         w_new, h_new = None, None 
         while rho < rho_max: 
-            """这里的rho是惩罚系数，rho_max是最大惩罚系数，w_new是更新后的w，h_new是更新后的h，w_new是更新后的w，h_new是更新后的h"""
             sol = sopt.minimize(_func, w_est, method='L-BFGS-B', jac=True, bounds=bnds) # 这里的sol是一个字典，sol['x']是更新后的w，sol['fun']是更新后的h
             w_new = sol.x # sol.x是一个[2 d^2]的矩阵，w_new是一个[d, d]的矩阵, 是最优解
             h_new, _ = _h(_adj(w_new)) # _adj(w_new)是一个[d, d]的矩阵，h_new是一个数值，是拉格朗日函数的值，_adj是一个函数，_h是一个函数
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     utils.set_random_seed(1)
 
     # n, d, s0, graph_type, sem_type = 100, 20, 20, 'ER', 'gauss'
-    n, d, s0, graph_type, sem_type = 100, 30, 30, 'ER', 'gauss'
+    n, d, s0, graph_type, sem_type = 100, 20, 20, 'ER', 'gauss'
     B_true = utils.simulate_dag(d, s0, graph_type)
     W_true = utils.simulate_parameter(B_true)
     # np.savetxt('W_true.csv', W_true, delimiter=',')
