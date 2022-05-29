@@ -24,8 +24,8 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
         """定义损失函数并且计算损失函数的值和梯度"""
         M = X @ W # M是X矩阵和W矩阵的乘积，X是样本矩阵，W是权重矩阵，X的维度是[n, d]，W的维度是[d, d]，M的维度是[n, d]
         if loss_type == 'l2':
-            R = X - M
-            loss = 0.5 / X.shape[0] * (R ** 2).sum()
+            R = X - M 
+            loss = 0.5 / X.shape[0] * (R ** 2).sum() 
             G_loss = - 1.0 / X.shape[0] * X.T @ R #G_loss是损失函数的梯度
 
         elif loss_type == 'logistic':
@@ -66,6 +66,7 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
 
     n, d = X.shape # n为样本数，d为特征数
     w_est, rho, alpha, h = np.zeros(2 * d * d), 1.0, 0.0, np.inf  # w_est是最终的结果，rho是惩罚系数，alpha是拉格朗日乘子，h是拉格朗日函数的值
+
     bnds = [(0, 0) if i == j else (0, None) for _ in range(2) for i in range(d) for j in range(d)] # bnds是约束条件，每个元素的第一个元素是下界，第二个元素是上界
     if loss_type == 'l2':
         X = X - np.mean(X, axis=0, keepdims=True) # 对X进行均值归一化，np.mean(X, axis=0, keepdims=True)表示按列求均值, 输出是一个[1,d]的矩阵
@@ -75,7 +76,7 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
             sol = sopt.minimize(_func, w_est, method='L-BFGS-B', jac=True, bounds=bnds) # 这里的sol是一个字典，sol['x']是更新后的w，sol['fun']是更新后的h
             w_new = sol.x # sol.x是一个[2 d^2]的矩阵，w_new是一个[d, d]的矩阵, 是最优解
             h_new, _ = _h(_adj(w_new)) # _adj(w_new)是一个[d, d]的矩阵，h_new是一个数值，是拉格朗日函数的值，_adj是一个函数，_h是一个函数
-            if h_new > 0.25 * h:       # 如果拉格朗日函数的值大于0.25*h，则步长翻倍
+            if h_new > 0.25 * h:       # 如果拉格朗日函数的值大于0.25*h，则rho变大
                 rho *= 10
             else:
                 break
