@@ -11,7 +11,7 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
         X (np.ndarray): [n, d] sample matrix
         lambda1 (float): l1 penalty parameter
         loss_type (str): l2, logistic, poisson
-        max_iter (int): max num of dual ascent steps
+        max_iter (int): max num of dual ascent steps #
         h_tol (float): exit if |h(w_est)| <= htol
         rho_max (float): exit if rho >= rho_max
         w_threshold (float): drop edge if |weight| < threshold
@@ -70,12 +70,16 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
     bnds = [(0, 0) if i == j else (0, None) for _ in range(2) for i in range(d) for j in range(d)] # bnds是约束条件，每个元素的第一个元素是下界，第二个元素是上界
     if loss_type == 'l2':
         X = X - np.mean(X, axis=0, keepdims=True) # 对X进行均值归一化，np.mean(X, axis=0, keepdims=True)表示按列求均值, 输出是一个[1,d]的矩阵
+    #TODO: 保存obj_list，用于绘图
+    obj_list = []
     for _ in range(max_iter): 
         w_new, h_new = None, None 
         while rho < rho_max: 
             sol = sopt.minimize(_func, w_est, method='L-BFGS-B', jac=True, bounds=bnds) # 这里的sol是一个字典，sol['x']是更新后的w，sol['fun']是更新后的h
             w_new = sol.x # sol.x是一个[2 d^2]的矩阵，w_new是一个[d, d]的矩阵, 是最优解
             h_new, _ = _h(_adj(w_new)) # _adj(w_new)是一个[d, d]的矩阵，h_new是一个数值，是拉格朗日函数的值，_adj是一个函数，_h是一个函数
+            #TODO: 添加obj
+            obj_list.append(sol.fun)
             if h_new > 0.25 * h:       # 如果拉格朗日函数的值大于0.25*h，则rho变大
                 rho *= 10
             else:
@@ -84,6 +88,9 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
         alpha += rho * h            # 更新alpha
         if h <= h_tol or rho >= rho_max:   # 如果拉格朗日函数的值小于等于h_tol或者步长大于等于rho_max，则结束循环
             break
+    # TODO:绘制obj并保存
+    plt.plot(obj_list)
+    plt.savefig('obj.png')
     W_est = _adj(w_est)
     W_est[np.abs(W_est) < w_threshold] = 0
     return W_est
