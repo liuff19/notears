@@ -119,7 +119,7 @@ def simulate_linear_sem(W, n, sem_type, noise_scale=None):
 
     d = W.shape[0]
     if noise_scale is None:
-        scale_vec = np.ones(d)
+        scale_vec = np.ones(d) * 10
     elif np.isscalar(noise_scale):
         scale_vec = noise_scale * np.ones(d)
     else:
