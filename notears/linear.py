@@ -3,7 +3,7 @@ import scipy.linalg as slin
 import scipy.optimize as sopt
 from scipy.special import expit as sigmoid
 import matplotlib.pyplot as plt
-
+import os
 
 def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3, B_true=None):
     """Solve min_W L(W; X) + lambda1 ‖W‖_1 s.t. h(W) = 0 using augmented Lagrangian.
@@ -42,13 +42,14 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
 
     def _single_loss(W):
         # 只计算每个节点带来的损失函数
-        M = X @ W 
-        assert loss_type =='l2'
+        M = X @ W
+        assert loss_type == 'l2'
         R = X - M
-        loss = 0.5 / X.shape[0] * (R ** 2)  # 矩阵维度是[n, d]，所以每个节点的损失函数是一个[n, 1]的矩阵
+        # 矩阵维度是[n, d]，所以每个节点的损失函数是一个[n, 1]的矩阵
+        loss = 0.5 / X.shape[0] * (R ** 2)
         # 求出每个节点的损失函数
         return loss
-        
+
     def _h(W):
         """Evaluate value and gradient of acyclicity constraint."""
         E = slin.expm(W * W)  # (Zheng et al. 2018)
@@ -84,11 +85,10 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
     if loss_type == 'l2':
         # 对X进行均值归一化，np.mean(X, axis=0, keepdims=True)表示按列求均值, 输出是一个[1,d]的矩阵
         X = X - np.mean(X, axis=0, keepdims=True)
-    
 
     ob_loss = []
     total_loss = []
-    for i in range(max_iter):
+    for iter in range(max_iter):
         w_new, h_new = None, None
         while rho < rho_max:
             # 这里的sol是一个字典，sol['x']是更新后的w，sol['fun']是更新后的h
@@ -111,26 +111,34 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
         if h <= h_tol or rho >= rho_max:   # 如果拉格朗日函数的值小于等于h_tol或者步长大于等于rho_max，则结束循环
             break
     # 把ob_loss列表中的元素concatenate到一起，得到一个[len(ob_loss), n]的矩阵
-    observed_loss = ob_loss[0].reshape(100,1)
+    observed_loss = ob_loss[0].reshape(100, 1)
     for i in range(1, len(ob_loss)):
-        observed_loss = np.concatenate((observed_loss, ob_loss[i].reshape(100,1)), axis=1)
+        observed_loss = np.concatenate(
+            (observed_loss, ob_loss[i].reshape(100, 1)), axis=1)
     # 绘制一个可以放100张图的图
-    plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(50, 50))
     for i in range(100):
         plt.subplot(10, 10, i + 1)
         plt.plot(observed_loss[i])
+        # 调整title字体大小
+        plt.title(i, fontsize=10)
         plt.title('node {}'.format(i))
         plt.axis('on')
         plt.box(True)
-    plt.savefig('observation_loss.png')
-    
+
+    if not os.path.exists('no_noise'):
+        os.makedirs('no_noise')
+    plt.savefig('no_noise/observation.png')    
+
     plt.figure(figsize=(20, 10))
     plt.plot(total_loss)
     plt.title('total loss')
-    plt.savefig('total_loss.png')
+    plt.savefig('no_noise/total_loss.png')
+
+
     W_est = _adj(w_est)
     W_est[np.abs(W_est) < w_threshold] = 0
-    return W_est, i
+    return W_est, iter
 
 
 if __name__ == '__main__':
@@ -147,9 +155,9 @@ if __name__ == '__main__':
     X = utils.simulate_linear_sem(W_true, n, sem_type)
     # np.savetxt('X.csv', X, delimiter=',')
 
-    W_est, i = notears_linear(
+    W_est, iter_num = notears_linear(
         X, max_iter=100, lambda1=0.1, loss_type='l2', B_true=B_true)
-    print(f'iteration: {i}')
+    print(f'iteration: {iter_num}')
     assert utils.is_dag(W_est)
     # np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = utils.count_accuracy(B_true, W_est != 0)
