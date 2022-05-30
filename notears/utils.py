@@ -10,7 +10,7 @@ def set_random_seed(seed):
 
 
 def is_dag(W):
-    G = ig.Graph.Weighted_Adjacency(W.tolist()) # tolist()是将矩阵转化为列表，ig.
+    G = ig.Graph.Weighted_Adjacency(W.tolist())  # tolist()是将矩阵转化为列表，ig.
     return G.is_dag()
 
 
@@ -31,7 +31,6 @@ def simulate_dag(d, s0, graph_type):
         # fangfu: P is a permutation matrix, not a permutation vector
         # fangfu: the return is the matrix after permutation
         return P.T @ M @ P
-        
 
     def _random_acyclic_orientation(B_und):
         """fangfu: orient the edges of an undirected graph."""
@@ -54,7 +53,8 @@ def simulate_dag(d, s0, graph_type):
     elif graph_type == 'BP':
         # Bipartite, Sec 4.1 of (Gu, Fu, Zhou, 2018)
         top = int(0.2 * d)
-        G = ig.Graph.Random_Bipartite(top, d - top, m=s0, directed=True, neimode=ig.OUT)
+        G = ig.Graph.Random_Bipartite(
+            top, d - top, m=s0, directed=True, neimode=ig.OUT)
         B = _graph_to_adjmat(G)
     else:
         raise ValueError('unknown graph type')
@@ -91,7 +91,7 @@ def simulate_linear_sem(W, n, sem_type, noise_scale=None):
         n (int): num of samples, n=inf mimics population risk
         sem_type (str): gauss, exp, gumbel, uniform, logistic, poisson
         noise_scale (np.ndarray): scale parameter of additive noise, default all ones
-
+        noise_scale是一个数组，其长度为W的维度，每个元素代表对应的维度的噪声系数
     Returns:
         X (np.ndarray): [n, d] sample matrix, [d, d] if n=inf
     """
@@ -119,7 +119,7 @@ def simulate_linear_sem(W, n, sem_type, noise_scale=None):
 
     d = W.shape[0]
     if noise_scale is None:
-        scale_vec = np.ones(d)
+        scale_vec = np.ones(d) *10
     elif np.isscalar(noise_scale):
         scale_vec = noise_scale * np.ones(d)
     else:
@@ -138,12 +138,13 @@ def simulate_linear_sem(W, n, sem_type, noise_scale=None):
     # empirical risk
     G = ig.Graph.Weighted_Adjacency(W.tolist())
     ordered_vertices = G.topological_sorting()
-    assert len(ordered_vertices) == d  
+    assert len(ordered_vertices) == d
     X = np.zeros([n, d])
     for j in ordered_vertices:
         parents = G.neighbors(j, mode=ig.IN)
-        X[:, j] = _simulate_single_equation(X[:, parents], W[parents, j], scale_vec[j])
-    return X 
+        X[:, j] = _simulate_single_equation(
+            X[:, parents], W[parents, j], scale_vec[j])
+    return X
 
 
 def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None):
@@ -204,7 +205,9 @@ def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None):
     return X
 
 
-def count_accuracy(B_true, B_est): # B_est是预测的结果
+    
+
+def count_accuracy(B_true, B_est):  # B_est是预测的结果
     """Compute various accuracy metrics for B_est.
 
     true positive = predicted association exists in condition in correct direction # TP
@@ -222,39 +225,44 @@ def count_accuracy(B_true, B_est): # B_est是预测的结果
         shd: undirected extra + undirected missing + reverse
         nnz: prediction positive # non-zero
     """
-    
-    if (B_est == -1).any():  # cpdag .any()的意思：查看是否有-1，有的话返回true， B_est的维度是[d, d]
-        if not ((B_est == 0) | (B_est == 1) | (B_est == -1)).all(): # 如果B_est中有其他的值，那么就报错
+
+    # cpdag .any()的意思：查看是否有-1，有的话返回true， B_est的维度是[d, d]
+    if (B_est == -1).any():
+        if not ((B_est == 0) | (B_est == 1) | (B_est == -1)).all():  # 如果B_est中有其他的值，那么就报错
             raise ValueError('B_est should take value in {0,1,-1}')
-        if ((B_est == -1) & (B_est.T == -1)).any(): 
+        if ((B_est == -1) & (B_est.T == -1)).any():
             raise ValueError('undirected edge should only appear once')
-    else:  # dag  
+    else:  # dag
         if not ((B_est == 0) | (B_est == 1)).all():
             raise ValueError('B_est should take value in {0,1}')
         if not is_dag(B_est):
             raise ValueError('B_est should be a DAG')
-    d = B_true.shape[0] # d是结果的维度
-    # linear index of nonzeros 
-    pred_und = np.flatnonzero(B_est == -1) # pred_und是预测的结果中的-1的索引 
+    d = B_true.shape[0]  # d是结果的维度
+    # linear index of nonzeros
+    pred_und = np.flatnonzero(B_est == -1)  # pred_und是预测的结果中的-1的索引
     pred = np.flatnonzero(B_est == 1)      # pred是预测的结果中的1的索引
     cond = np.flatnonzero(B_true)          # cond是真实的结果中的1的索引
-    cond_reversed = np.flatnonzero(B_true.T) # cond_reversed是真实的结果中的-1的索引
-    cond_skeleton = np.concatenate([cond, cond_reversed]) # cond_skeleton是真实的结果中的1和-1的索引
+    cond_reversed = np.flatnonzero(B_true.T)  # cond_reversed是真实的结果中的-1的索引
+    # cond_skeleton是真实的结果中的1和-1的索引
+    cond_skeleton = np.concatenate([cond, cond_reversed])
     # true pos
-    true_pos = np.intersect1d(pred, cond, assume_unique=True) 
+    true_pos = np.intersect1d(pred, cond, assume_unique=True)
     # treat undirected edge favorably
-    true_pos_und = np.intersect1d(pred_und, cond_skeleton, assume_unique=True) 
-    true_pos = np.concatenate([true_pos, true_pos_und]) 
+    true_pos_und = np.intersect1d(pred_und, cond_skeleton, assume_unique=True)
+    true_pos = np.concatenate([true_pos, true_pos_und])
     # false pos
-    false_pos = np.setdiff1d(pred, cond_skeleton, assume_unique=True) # false_pos是预测的结果中的1和-1的索引，但是不在真实的结果中
+    # false_pos是预测的结果中的1和-1的索引，但是不在真实的结果中
+    false_pos = np.setdiff1d(pred, cond_skeleton, assume_unique=True)
     false_pos_und = np.setdiff1d(pred_und, cond_skeleton, assume_unique=True)
     false_pos = np.concatenate([false_pos, false_pos_und])
     # reverse
-    extra = np.setdiff1d(pred, cond, assume_unique=True) # extra是预测的结果中的1的索引，但是不在真实的结果中
-    reverse = np.intersect1d(extra, cond_reversed, assume_unique=True) # reverse是预测的结果中的1和-1的索引，但是在真实的结果中
+    # extra是预测的结果中的1的索引，但是不在真实的结果中
+    extra = np.setdiff1d(pred, cond, assume_unique=True)
+    # reverse是预测的结果中的1和-1的索引，但是在真实的结果中
+    reverse = np.intersect1d(extra, cond_reversed, assume_unique=True)
     # compute ratio
-    pred_size = len(pred) + len(pred_und) # pred_size是预测的结果中的1和-1的索引的个数
-    cond_neg_size = 0.5 * d * (d - 1) - len(cond) # cond_neg_size是计算
+    pred_size = len(pred) + len(pred_und)  # pred_size是预测的结果中的1和-1的索引的个数
+    cond_neg_size = 0.5 * d * (d - 1) - len(cond)  # cond_neg_size是计算
     fdr = float(len(reverse) + len(false_pos)) / max(pred_size, 1)
     tpr = float(len(true_pos)) / max(len(cond), 1)
     fpr = float(len(reverse) + len(false_pos)) / max(cond_neg_size, 1)
@@ -264,6 +272,5 @@ def count_accuracy(B_true, B_est): # B_est是预测的结果
     extra_lower = np.setdiff1d(pred_lower, cond_lower, assume_unique=True)
     missing_lower = np.setdiff1d(cond_lower, pred_lower, assume_unique=True)
     shd = len(extra_lower) + len(missing_lower) + len(reverse)
-    # return {'fdr': fdr, 'tpr': tpr, 'fpr': fpr, 'shd': shd, 'nnz': pred_size}
-    return fdr, tpr
-
+    return {'fdr': fdr, 'tpr': tpr, 'fpr': fpr, 'shd': shd, 'nnz': pred_size}
+    # return fdr, tpr
