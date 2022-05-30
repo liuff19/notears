@@ -138,12 +138,12 @@ def simulate_linear_sem(W, n, sem_type, noise_scale=None):
     # empirical risk
     G = ig.Graph.Weighted_Adjacency(W.tolist())
     ordered_vertices = G.topological_sorting()
-    assert len(ordered_vertices) == d
+    assert len(ordered_vertices) == d  
     X = np.zeros([n, d])
     for j in ordered_vertices:
         parents = G.neighbors(j, mode=ig.IN)
         X[:, j] = _simulate_single_equation(X[:, parents], W[parents, j], scale_vec[j])
-    return X
+    return X 
 
 
 def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None):
@@ -264,5 +264,6 @@ def count_accuracy(B_true, B_est): # B_est是预测的结果
     extra_lower = np.setdiff1d(pred_lower, cond_lower, assume_unique=True)
     missing_lower = np.setdiff1d(cond_lower, pred_lower, assume_unique=True)
     shd = len(extra_lower) + len(missing_lower) + len(reverse)
-    return {'fdr': fdr, 'tpr': tpr, 'fpr': fpr, 'shd': shd, 'nnz': pred_size}
+    # return {'fdr': fdr, 'tpr': tpr, 'fpr': fpr, 'shd': shd, 'nnz': pred_size}
+    return fdr, tpr
 

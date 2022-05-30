@@ -4,7 +4,7 @@ import scipy.optimize as sopt
 from scipy.special import expit as sigmoid
 import matplotlib.pyplot as plt
 
-def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3):
+def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3, B_true=None):
     """Solve min_W L(W; X) + lambda1 ‖W‖_1 s.t. h(W) = 0 using augmented Lagrangian.
 
     Args:
@@ -71,29 +71,53 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
     if loss_type == 'l2':
         X = X - np.mean(X, axis=0, keepdims=True) # 对X进行均值归一化，np.mean(X, axis=0, keepdims=True)表示按列求均值, 输出是一个[1,d]的矩阵
     #TODO: 保存obj_list，用于绘图
-    obj_list = []
-    for _ in range(max_iter): 
+    tpr = []
+    fdr = []
+    obj = []
+    for i in range(max_iter): 
         w_new, h_new = None, None 
         while rho < rho_max: 
             sol = sopt.minimize(_func, w_est, method='L-BFGS-B', jac=True, bounds=bnds) # 这里的sol是一个字典，sol['x']是更新后的w，sol['fun']是更新后的h
             w_new = sol.x # sol.x是一个[2 d^2]的矩阵，w_new是一个[d, d]的矩阵, 是最优解
             h_new, _ = _h(_adj(w_new)) # _adj(w_new)是一个[d, d]的矩阵，h_new是一个数值，是拉格朗日函数的值，_adj是一个函数，_h是一个函数
-            #TODO: 添加obj
-            obj_list.append(sol.fun)
+            obj_tmp = sol.fun # sol.fun是一个数值，是拉格朗日函数的值
+            obj.append(obj_tmp)
             if h_new > 0.25 * h:       # 如果拉格朗日函数的值大于0.25*h，则rho变大
                 rho *= 10
             else:
                 break
         w_est, h = w_new, h_new     # 更新w_est和h
+        # if i>3:
+        # # 绘制tpr随着迭代次数的变化
+        #     w_tmp = _adj(w_est)
+        #     w_tmp[np.abs(w_tmp)<w_threshold]=0
+        #     assert utils.is_dag(w_tmp)
+        #     fdr_tmp,tpr_tmp = utils.count_accuracy(B_true, w_tmp != 0)
+        #     tpr.append(tpr_tmp)
+        #     fdr.append(fdr_tmp)
         alpha += rho * h            # 更新alpha
         if h <= h_tol or rho >= rho_max:   # 如果拉格朗日函数的值小于等于h_tol或者步长大于等于rho_max，则结束循环
             break
-    # TODO:绘制obj并保存
-    plt.plot(obj_list)
-    plt.savefig('obj.png')
+
+    # #一张图里画两个曲线：曲线1：tpr随着迭代次数的变化，曲线2：fdr随着迭代次数的变化
+    # plt.figure(figsize=(10,5))
+    # plt.plot(range(len(tpr)),tpr,label='tpr')
+    # plt.plot(range(len(fdr)),fdr,label='fdr')
+    # plt.xlabel('iteration')
+    # plt.ylabel('accuracy')
+    # plt.legend()
+    # 保存图片
+    plt.savefig('tpr_fdr.png')
+    # 在原有的obj.png添加一下obj随着迭代次数的变化
+    plt.figure(figsize=(10,5))
+    plt.plot(range(len(obj)),obj)
+    plt.xlabel('iteration')
+    plt.ylabel('obj')
+    plt.title('100sample, 50nodes, 50edges')
+    plt.savefig('obj2.png')
     W_est = _adj(w_est)
     W_est[np.abs(W_est) < w_threshold] = 0
-    return W_est
+    return W_est, i
 
 
 if __name__ == '__main__':
@@ -102,7 +126,7 @@ if __name__ == '__main__':
     utils.set_random_seed(1)
 
     # n, d, s0, graph_type, sem_type = 100, 20, 20, 'ER', 'gauss'
-    n, d, s0, graph_type, sem_type = 100, 20, 20, 'ER', 'gauss'
+    n, d, s0, graph_type, sem_type = 100, 50, 50, 'ER', 'gauss'
     B_true = utils.simulate_dag(d, s0, graph_type)
     W_true = utils.simulate_parameter(B_true)
     # np.savetxt('W_true.csv', W_true, delimiter=',')
@@ -110,9 +134,10 @@ if __name__ == '__main__':
     X = utils.simulate_linear_sem(W_true, n, sem_type)
     # np.savetxt('X.csv', X, delimiter=',')
 
-    W_est = notears_linear(X, max_iter=100, lambda1=0.1, loss_type='l2')
+    W_est,i = notears_linear(X, max_iter=100, lambda1=0.1, loss_type='l2',B_true=B_true)
+    print(f'iteration: {i}')
     assert utils.is_dag(W_est)
     # np.savetxt('W_est.csv', W_est, delimiter=',')
-    acc = utils.count_accuracy(B_true, W_est != 0)
-    print(acc)
+    # acc = utils.count_accuracy(B_true, W_est != 0)
+    # print(acc)
 
