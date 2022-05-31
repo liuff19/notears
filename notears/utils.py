@@ -119,7 +119,7 @@ def simulate_linear_sem(W, n, sem_type, noise_scale=None):
 
     d = W.shape[0]
     if noise_scale is None:
-        scale_vec = np.ones(d) * 10
+        scale_vec = np.ones(d)
     elif np.isscalar(noise_scale):
         scale_vec = noise_scale * np.ones(d)
     else:
@@ -131,7 +131,7 @@ def simulate_linear_sem(W, n, sem_type, noise_scale=None):
     if np.isinf(n):  # population risk for linear gauss SEM
         if sem_type == 'gauss':
             # make 1/d X'X = true cov
-            X = np.sqrt(d) * np.diag(scale_vec) @ np.linalg.inv(np.eye(d) - W)
+            X = np.sqrt(d) * np.diag(scale_vec) @ np.linalg.inv(np.eye(d) - W) 
             return X
         else:
             raise ValueError('population risk not available')
@@ -154,7 +154,7 @@ def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None):
         B (np.ndarray): [d, d] binary adj matrix of DAG
         n (int): num of samples
         sem_type (str): mlp, mim, gp, gp-add
-        noise_scale (np.ndarray): scale parameter of additive noise, default all ones
+        noise_scale (np.ndarray): scale parameter of additive noise, default all ones 
 
     Returns:
         X (np.ndarray): [n, d] sample matrix

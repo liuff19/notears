@@ -4,7 +4,10 @@ import scipy.optimize as sopt
 from scipy.special import expit as sigmoid
 import matplotlib.pyplot as plt
 import os
-
+import tqdm as tqdm
+beta = 0.1
+reweight_list = []
+epoch = 6
 def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3, B_true=None):
     """Solve min_W L(W; X) + lambda1 ‖W‖_1 s.t. h(W) = 0 using augmented Lagrangian.
 
@@ -27,7 +30,7 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
         if loss_type == 'l2':
             R = X - M
             loss = 0.5 / X.shape[0] * (R ** 2).sum()
-            G_loss = - 1.0 / X.shape[0] * X.T @ R  # G_loss是损失函数的梯度
+            G_loss = - 1.0 / X.shape[0] * X.T @ R  # G_loss是损失函数的梯度 维度是[d, d]
 
         elif loss_type == 'logistic':
             loss = 1.0 / X.shape[0] * (np.logaddexp(0, M) - X * M).sum()
@@ -40,6 +43,20 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
             raise ValueError('unknown loss type')
         return loss, G_loss
 
+    def _reweighloss(W):
+        M = X @ W
+        R = X - M
+        assert loss_type in ['l2', 'logistic', 'poisson']
+        rewei_num = len(reweight_list)
+        re_matrix = np.eye(100,100)
+        for idx in reweight_list:
+            re_matrix[idx][idx] = beta
+        loss = 0.5 / X.shape[0] * ((re_matrix @ R) ** 2).sum()
+        G_loss = - 1.0 / X.shape[0] * X.T @ ((re_matrix**2) @ R)
+        # return loss, G_loss
+        return loss,G_loss
+
+    
     def _single_loss(W):
         # 只计算每个节点带来的损失函数
         M = X @ W
@@ -52,8 +69,16 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
 
     def _h(W):
         """Evaluate value and gradient of acyclicity constraint."""
+        
         E = slin.expm(W * W)  # (Zheng et al. 2018)
+        # 检查E中有没有nan元素，如果有则输出1
+        if np.any(np.isnan(E)) or np.any(np.isinf(E)):
+            print('nan in expm')
+            return 1
         h = np.trace(E) - d
+        if np.any( np.isnan(h)) or np.any(np.isinf(h)):
+            print('nan in h')
+            return 1
         #     # A different formulation, slightly faster at the cost of numerical stability
         #     M = np.eye(d) + W * W / d  # (Yu et al. 2019)
         #     E = np.linalg.matrix_power(M, d - 1)
@@ -76,6 +101,16 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
             (G_smooth + lambda1, - G_smooth + lambda1), axis=None)
         return obj, g_obj
 
+    def _refunc(w):
+        W = _adj(w)
+        loss, G_loss = _reweighloss(W)
+        h, G_h = _h(W)
+        obj = loss + 0.5 * rho * h * h + alpha * h + lambda1 * w.sum()
+        G_smooth = G_loss + (rho * h + alpha) * G_h
+        g_obj = np.concatenate(
+            (G_smooth + lambda1, - G_smooth + lambda1), axis=None)
+        return obj, g_obj
+
     n, d = X.shape  # n为样本数，d为特征数
     # w_est是最终的结果，rho是惩罚系数，alpha是拉格朗日乘子，h是拉格朗日函数的值
     w_est, rho, alpha, h = np.zeros(2 * d * d), 1.0, 0.0, np.inf
@@ -88,16 +123,36 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
 
     ob_loss = []
     total_loss = []
-    for iter in range(max_iter):
+    xepoch = 0
+    for iter in tqdm.tqdm(range(max_iter)):
         w_new, h_new = None, None
         while rho < rho_max:
+            xepoch+=1
             # 这里的sol是一个字典，sol['x']是更新后的w，sol['fun']是更新后的h
-            sol = sopt.minimize(
-                _func, w_est, method='L-BFGS-B', jac=True, bounds=bnds)
+            if xepoch<epoch:
+                sol = sopt.minimize(
+                    _func, w_est, method='L-BFGS-B', jac=True, bounds=bnds)
+            elif xepoch==epoch:
+                w_new = sol.x
+                loss_record = _single_loss(_adj(w_new))
+                each_loss = loss_record.sum(axis=1)
+                # 让each_loss按照每个节点的损失函数进行排序 从小到大
+                each_loss_idx = each_loss.argsort()
+                reweight_list = each_loss_idx[:int(len(each_loss_idx)*0.1)]
+                sol = sopt.minimize(
+                    _refunc, w_est, method='L-BFGS-B', jac=True, bounds=bnds)
+                # sol = sopt.minimize(
+                #     _func, w_est, method='L-BFGS-B', jac=True, bounds=bnds)
+            elif xepoch>epoch:
+                sol = sopt.minimize(
+                    _refunc, w_est, method='L-BFGS-B', jac=True, bounds=bnds)
+
             w_new = sol.x  # sol.x是一个[2 d^2]的矩阵，w_new是一个[d, d]的矩阵, 是最优解
+
             # _adj(w_new)是一个[d, d]的矩阵，h_new是一个数值，是拉格朗日函数的值，_adj是一个函数，_h是一个函数
             loss_record = _single_loss(_adj(w_new))
             # 将loss_record按照行求和，得到一个[n, 1]的矩阵
+            
             each_loss = loss_record.sum(axis=1)
             ob_loss.append(each_loss)
             total_loss.append(_loss(_adj(w_new))[0])
@@ -147,7 +202,7 @@ if __name__ == '__main__':
     utils.set_random_seed(1)
 
     # n, d, s0, graph_type, sem_type = 100, 20, 20, 'ER', 'gauss'
-    n, d, s0, graph_type, sem_type = 100, 30, 30, 'ER', 'gauss'
+    n, d, s0, graph_type, sem_type = 100, 40, 40, 'ER', 'gauss'
     B_true = utils.simulate_dag(d, s0, graph_type)
     W_true = utils.simulate_parameter(B_true)
     # np.savetxt('W_true.csv', W_true, delimiter=',')
