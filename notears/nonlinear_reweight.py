@@ -12,9 +12,9 @@ import tqdm as tqdm
 import matplotlib.pyplot as plt
 import os
 
-beta = 0.1
+beta = 1
 reweight_list = []
-epoch = 1
+epoch = 0
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
         super(NotearsMLP, self).__init__()
@@ -179,6 +179,7 @@ def single_loss(output, target):
 def reweighted_loss(output, target):
     n = target.shape[0]
     re_matrix = torch.eye(n,n)
+    global reweight_list
     for idx in reweight_list:
         re_matrix[idx,idx] = beta
     R = output-target
@@ -224,15 +225,19 @@ def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
         optimizer.step(closure)  # NOTE: updates model in-place
         global x_epoch
         x_epoch = x_epoch + 1
+        print(x_epoch)
         if x_epoch < epoch:
             optimizer.step(closure)
         else:
-            optimizer.step(closure)
+            optimizer.step(reweighted_closure)
         # obj_loss.append(loss.item())
         loss_record = single_loss(model(X_torch), X_torch)
         each_loss = torch.sum(loss_record, dim=1)
         # 将each_loss转成numpy
-        each_loss = each_loss.cpu().detach().numpy()    
+        each_loss = each_loss.cpu().detach().numpy()
+        each_loss_idx = each_loss.argsort()
+        global reweight_list
+        reweight_list = each_loss_idx[:int((len(each_loss_idx))*0.1)]
         ob_loss.append(each_loss)
 
         # obj_loss.append(each_loss[0].detach().numpy())
@@ -277,7 +282,7 @@ def main():
     ut.set_random_seed(123)
 
     # n, d, s0, graph_type, sem_type = 100, 20, 20, 'ER', 'mim'
-    n, d, s0, graph_type, sem_type = 200, 5, 9, 'ER', 'mim'
+    n, d, s0, graph_type, sem_type = 100,20, 20, 'ER', 'mim'
     # n, d, s0, graph_type, sem_type = 100,40,40, 'ER', 'mim'
     B_true = ut.simulate_dag(d, s0, graph_type)
     # np.savetxt('W_true.csv', B_true, delimiter=',')
@@ -291,11 +296,17 @@ def main():
     # np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)
     print(acc)
+    # 将acc信息和对应的beta，epoch信息保存到文件acc.txt中 并换行，如果acc文件不存在则创建
+    with open('acc.txt', 'a+') as f:
+        f.write(str(beta) + '\n')
+        f.write(str(epoch) + '\n')
+        f.write(str(acc) + '\n' + '\n')
+        
     
     observed_loss = ob_loss[0].reshape(n,1)
     for i in range(1, len(ob_loss)):
         observed_loss = np.concatenate((observed_loss, ob_loss[i].reshape(n,1)), axis=1)
-    plt.figure(figsize=(50, 50))
+    plt.figure(figsize=(100, 50))
     for i in range(n):
         plt.subplot(n//10, 10, i + 1)
         plt.plot(observed_loss[i])
@@ -308,7 +319,7 @@ def main():
     if not os.path.exists('non_linear'):
         os.makedirs('non_linear')
     # 存储的时候加上节点信息
-    plt.savefig('non_linear/observation_n{}_d{}_s{}_{}_{}.png'.format(n, d, s0, graph_type, sem_type))
+    plt.savefig('non_linear/beta_{}_epoch{}_reweight_observation_n{}_d{}_s{}_{}_{}.png'.format(beta, epoch, n, d, s0, graph_type, sem_type))
 
     total_loss =[]
     for i in range(len(ob_loss)):
@@ -320,7 +331,7 @@ def main():
     plt.axis('on')
     # 并保存图片
     # 保存在文件夹20nodes中
-    plt.savefig('non_linear/totalloss_n{}_d{}_s{}_{}_{}.png'.format(n, d, s0, graph_type, sem_type))
-
+    plt.savefig('non_linear/beta_{}_epoch{}_reweight_totalloss_n{}_d{}_s{}_{}_{}.png'.format(beta, epoch, n, d, s0, graph_type, sem_type))
+    
 if __name__ == '__main__':
     main()
