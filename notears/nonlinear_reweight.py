@@ -12,9 +12,9 @@ import tqdm as tqdm
 import matplotlib.pyplot as plt
 import os
 
-beta = 1
+beta = 0.2
 reweight_list = []
-epoch = 0
+epoch = 6
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
         super(NotearsMLP, self).__init__()
@@ -282,7 +282,7 @@ def main():
     ut.set_random_seed(123)
 
     # n, d, s0, graph_type, sem_type = 100, 20, 20, 'ER', 'mim'
-    n, d, s0, graph_type, sem_type = 100,20, 20, 'ER', 'mim'
+    n, d, s0, graph_type, sem_type = 100,40, 40, 'ER', 'mim'
     # n, d, s0, graph_type, sem_type = 100,40,40, 'ER', 'mim'
     B_true = ut.simulate_dag(d, s0, graph_type)
     # np.savetxt('W_true.csv', B_true, delimiter=',')
