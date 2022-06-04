@@ -9,7 +9,12 @@ import torch.nn as nn
 import numpy as np
 import math
 import tqdm as tqdm
+import matplotlib.pyplot as plt
+import os
 
+beta = 0.1
+reweight_list = []
+epoch = 1
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
         super(NotearsMLP, self).__init__()
@@ -160,12 +165,31 @@ class NotearsSobolev(nn.Module):
         W = W.cpu().detach().numpy()  # [i, j]
         return W
 
-
+# loss functions
 def squared_loss(output, target):
     n = target.shape[0]
     loss = 0.5 / n * torch.sum((output - target) ** 2)
     return loss
 
+def single_loss(output, target):
+    n = target.shape[0]
+    loss = 0.5 / n * ((output - target) ** 2)
+    return loss
+
+def reweighted_loss(output, target):
+    n = target.shape[0]
+    re_matrix = torch.eye(n,n)
+    for idx in reweight_list:
+        re_matrix[idx,idx] = beta
+    R = output-target
+    loss = 0.5 / n * torch.sum(torch.matmul(re_matrix, R) ** 2)
+    return loss
+
+obj_loss = []
+ob_loss = []
+observed_loss = []
+x_epoch = 0
+loss = 0
 def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
     """Perform one step of dual ascent in augmented Lagrangian."""
     h_new = None
@@ -175,6 +199,7 @@ def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
         def closure():
             optimizer.zero_grad()
             X_hat = model(X_torch)
+            global loss
             loss = squared_loss(X_hat, X_torch)
             h_val = model.h_func()
             penalty = 0.5 * rho * h_val * h_val + alpha * h_val
@@ -183,7 +208,37 @@ def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
             primal_obj = loss + penalty + l2_reg + l1_reg
             primal_obj.backward()
             return primal_obj
+        def reweighted_closure():
+            optimizer.zero_grad()
+            X_hat = model(X_torch)
+            global loss
+            loss = reweighted_loss(X_hat, X_torch)
+            h_val = model.h_func()
+            penalty = 0.5 * rho * h_val * h_val + alpha * h_val
+            l2_reg = 0.5 * lambda2 * model.l2_reg()
+            l1_reg = lambda1 * model.fc1_l1_reg()
+            primal_obj = loss + penalty + l2_reg + l1_reg
+            primal_obj.backward()
+            return primal_obj
+        
         optimizer.step(closure)  # NOTE: updates model in-place
+        global x_epoch
+        x_epoch = x_epoch + 1
+        if x_epoch < epoch:
+            optimizer.step(closure)
+        else:
+            optimizer.step(closure)
+        # obj_loss.append(loss.item())
+        loss_record = single_loss(model(X_torch), X_torch)
+        each_loss = torch.sum(loss_record, dim=1)
+        # 将each_loss转成numpy
+        each_loss = each_loss.cpu().detach().numpy()    
+        ob_loss.append(each_loss)
+
+        # obj_loss.append(each_loss[0].detach().numpy())
+        
+        # obj_loss.append(closure().detach().numpy())
+
         with torch.no_grad():
             h_new = model.h_func().item()
         if h_new > 0.25 * h:
@@ -221,8 +276,9 @@ def main():
     import utils as ut
     ut.set_random_seed(123)
 
-    # n, d, s0, graph_type, sem_type = 200, 5, 9, 'ER', 'mim'
-    n, d, s0, graph_type, sem_type = 100, 40, 40, 'ER', 'mim'
+    # n, d, s0, graph_type, sem_type = 100, 20, 20, 'ER', 'mim'
+    n, d, s0, graph_type, sem_type = 200, 5, 9, 'ER', 'mim'
+    # n, d, s0, graph_type, sem_type = 100,40,40, 'ER', 'mim'
     B_true = ut.simulate_dag(d, s0, graph_type)
     # np.savetxt('W_true.csv', B_true, delimiter=',')
 
@@ -235,7 +291,36 @@ def main():
     # np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)
     print(acc)
+    
+    observed_loss = ob_loss[0].reshape(n,1)
+    for i in range(1, len(ob_loss)):
+        observed_loss = np.concatenate((observed_loss, ob_loss[i].reshape(n,1)), axis=1)
+    plt.figure(figsize=(50, 50))
+    for i in range(n):
+        plt.subplot(n//10, 10, i + 1)
+        plt.plot(observed_loss[i])
+        # 调整title字体大小
+        plt.title(i, fontsize=10)
+        plt.title('node {}'.format(i))
+        plt.axis('on')
+        plt.box(True)
 
+    if not os.path.exists('non_linear'):
+        os.makedirs('non_linear')
+    # 存储的时候加上节点信息
+    plt.savefig('non_linear/observation_n{}_d{}_s{}_{}_{}.png'.format(n, d, s0, graph_type, sem_type))
+
+    total_loss =[]
+    for i in range(len(ob_loss)):
+        total_loss.append(np.sum(ob_loss[i]))
+    plt.figure(figsize=(10, 10))
+    # 画出total_loss的变化
+    plt.plot(total_loss)
+    # 显示坐标轴
+    plt.axis('on')
+    # 并保存图片
+    # 保存在文件夹20nodes中
+    plt.savefig('non_linear/totalloss_n{}_d{}_s{}_{}_{}.png'.format(n, d, s0, graph_type, sem_type))
 
 if __name__ == '__main__':
     main()

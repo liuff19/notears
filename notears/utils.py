@@ -147,7 +147,7 @@ def simulate_linear_sem(W, n, sem_type, noise_scale=None):
     return X
 
 
-def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None):
+def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None): # 生成非线性的SEM
     """Simulate samples from nonlinear SEM.
 
     Args:
@@ -161,7 +161,7 @@ def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None):
     """
     def _simulate_single_equation(X, scale):
         """X: [n, num of parents], x: [n]"""
-        z = np.random.normal(scale=scale, size=n)
+        z = np.random.normal(scale=scale, size=n) # 作用是生成噪声，np.random.normal的参数是均值和标准差
         pa_size = X.shape[1]
         if pa_size == 0:
             return z
@@ -196,7 +196,7 @@ def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None):
     d = B.shape[0]
     scale_vec = noise_scale if noise_scale else np.ones(d)
     X = np.zeros([n, d])
-    G = ig.Graph.Adjacency(B.tolist())
+    G = ig.Graph.Adjacency(B.tolist()) # 将B转化为邻接矩阵
     ordered_vertices = G.topological_sorting()
     assert len(ordered_vertices) == d
     for j in ordered_vertices:

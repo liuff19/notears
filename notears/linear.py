@@ -181,14 +181,14 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
         plt.axis('on')
         plt.box(True)
 
-    if not os.path.exists('noise_30nodes'):
-        os.makedirs('noise_30nodes')
-    plt.savefig('noise_30nodes/observation.png')    
+    if not os.path.exists('linear_notears'):
+        os.makedirs('linear_notears')
+    plt.savefig('linear_notears/observation.png')    
 
     plt.figure(figsize=(20, 10))
     plt.plot(total_loss)
     plt.title('total loss(30nodes+noise*10)')
-    plt.savefig('noise_30nodes/total_loss.png')
+    plt.savefig('linear_notears/total_loss.png')
 
 
     W_est = _adj(w_est)
@@ -202,7 +202,7 @@ if __name__ == '__main__':
     utils.set_random_seed(1)
 
     # n, d, s0, graph_type, sem_type = 100, 20, 20, 'ER', 'gauss'
-    n, d, s0, graph_type, sem_type = 100, 40, 40, 'ER', 'gauss'
+    n, d, s0, graph_type, sem_type = 100, 20, 20, 'ER', 'gauss'
     B_true = utils.simulate_dag(d, s0, graph_type)
     W_true = utils.simulate_parameter(B_true)
     # np.savetxt('W_true.csv', W_true, delimiter=',')
