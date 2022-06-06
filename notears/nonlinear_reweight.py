@@ -14,7 +14,7 @@ import os
 
 beta = 0.2
 reweight_list = []
-epoch = 6
+epoch = 7
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
         super(NotearsMLP, self).__init__()
