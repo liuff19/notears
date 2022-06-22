@@ -9,7 +9,7 @@ import torch.nn as nn
 import numpy as np
 import math
 import tqdm as tqdm
-
+from runhelper import *
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
         super(NotearsMLP, self).__init__()
@@ -161,6 +161,7 @@ class NotearsSobolev(nn.Module):
         return W
 
 
+# fangfu: loss function 
 def squared_loss(output, target):
     n = target.shape[0]
     loss = 0.5 / n * torch.sum((output - target) ** 2)
@@ -215,23 +216,26 @@ def notears_nonlinear(model: nn.Module,
 
 
 def main():
-    torch.set_default_dtype(torch.double)
-    np.set_printoptions(precision=3)   # 这是为了让输出的结果更精确，set_printoptions()的作用是设置输出的精度
+    # fangfu
+    parser = config_parser()
+    args = parser.parse_args()
+    print(args)
+    print('==' * 20)
 
-    # import notears.utils as ut
+    torch.set_default_dtype(torch.double)
+    np.set_printoptions(precision=3) 
+
     import utils as ut
     ut.set_random_seed(123)
 
-    n, d, s0, graph_type, sem_type = 200, 5, 9, 'ER', 'mim'
-    # n, d, s0, graph_type, sem_type = 100, 40, 40, 'ER', 'mim'
-    B_true = ut.simulate_dag(d, s0, graph_type)
+    B_true = ut.simulate_dag(args.d, args.s0, args.graph_type)
     # np.savetxt('W_true.csv', B_true, delimiter=',')
 
-    X = ut.simulate_nonlinear_sem(B_true, n, sem_type)
+    X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
     # np.savetxt('X.csv', X, delimiter=',')
 
-    model = NotearsMLP(dims=[d, 10, 1], bias=True)
-    W_est = notears_nonlinear(model, X, lambda1=0.01, lambda2=0.01)
+    model = NotearsMLP(dims=[args.d, 10, 1], bias=True)
+    W_est = notears_nonlinear(model, X, args.lambda1, args.lambda2)
     assert ut.is_dag(W_est)
     # np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)

@@ -147,7 +147,7 @@ def simulate_linear_sem(W, n, sem_type, noise_scale=None):
     return X
 
 
-def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None): # 生成非线性的SEM
+def simulate_nonlinear_sem(B, n, sem_type, noise_scale = None): # 生成非线性的SEM
     """Simulate samples from nonlinear SEM.
 
     Args:
@@ -172,7 +172,7 @@ def simulate_nonlinear_sem(B, n, sem_type, noise_scale=None): # 生成非线性�
             W2 = np.random.uniform(low=0.5, high=2.0, size=hidden)
             W2[np.random.rand(hidden) < 0.5] *= -1
             x = sigmoid(X @ W1) @ W2 + z
-        elif sem_type == 'mim':
+        elif sem_type == 'mim':  
             w1 = np.random.uniform(low=0.5, high=2.0, size=pa_size)
             w1[np.random.rand(pa_size) < 0.5] *= -1
             w2 = np.random.uniform(low=0.5, high=2.0, size=pa_size)
@@ -273,4 +273,3 @@ def count_accuracy(B_true, B_est):  # B_est是预测的结果
     missing_lower = np.setdiff1d(cond_lower, pred_lower, assume_unique=True)
     shd = len(extra_lower) + len(missing_lower) + len(reverse)
     return {'fdr': fdr, 'tpr': tpr, 'fpr': fpr, 'shd': shd, 'nnz': pred_size}
-    # return fdr, tpr
