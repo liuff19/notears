@@ -2,7 +2,8 @@ import numpy as np
 from scipy.special import expit as sigmoid
 import igraph as ig
 import random
-
+import cdt
+import networkx as nx
 
 def set_random_seed(seed):
     random.seed(seed)
@@ -39,7 +40,7 @@ def simulate_dag(d, s0, graph_type):
 
     def _graph_to_adjmat(G):
         # fangfu: 将图转化为邻接矩阵
-        return np.array(G.get_adjacency().data)
+        return np.array(G.get_adjacency().data) 
 
     if graph_type == 'ER':
         # Erdos-Renyi
@@ -197,7 +198,7 @@ def simulate_nonlinear_sem(B, n, sem_type, noise_scale = None): # 生成非线�
     scale_vec = noise_scale if noise_scale else np.ones(d)
     X = np.zeros([n, d])
     G = ig.Graph.Adjacency(B.tolist()) # 将B转化为邻接矩阵
-    ordered_vertices = G.topological_sorting()
+    ordered_vertices = G.topological_sorting() # topological_sorting 是按照拓扑排序的，返回一个列表
     assert len(ordered_vertices) == d
     for j in ordered_vertices:
         parents = G.neighbors(j, mode=ig.IN)
@@ -273,3 +274,9 @@ def count_accuracy(B_true, B_est):  # B_est是预测的结果
     missing_lower = np.setdiff1d(cond_lower, pred_lower, assume_unique=True)
     shd = len(extra_lower) + len(missing_lower) + len(reverse)
     return {'fdr': fdr, 'tpr': tpr, 'fpr': fpr, 'shd': shd, 'nnz': pred_size}
+
+
+def get_sachs_gt():
+    data, graph = cdt.data.load_dataset('sachs')
+    a = nx.adj_matrix(graph).todense()
+    return a

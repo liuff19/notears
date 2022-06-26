@@ -3,6 +3,7 @@
 # from notears.trace_expm import trace_expm
 from locally_connected import LocallyConnected
 from lbfgsb_scipy import LBFGSBScipy
+from utils import get_sachs_gt
 from trace_expm import trace_expm
 import torch
 import torch.nn as nn
@@ -11,7 +12,6 @@ import math
 import tqdm as tqdm
 from runhelper import *
 from loss_func import *
-
 
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
@@ -284,11 +284,15 @@ def main():
     import utils as ut
     ut.set_random_seed(args.seed)
 
-    B_true = ut.simulate_dag(args.d, args.s0, args.graph_type)
+    # B_true = ut.simulate_dag(args.d, args.s0, args.graph_type)
     # np.savetxt('W_true.csv', B_true, delimiter=',')
 
-    X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
+    # X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
     # np.savetxt('X.csv', X, delimiter=',')
+    # X = np.loadtxt('X.csv', delimiter=',')
+    
+    X = np.loadtxt('X.csv', delimiter=',')
+    B_true = get_sachs_gt()
 
     model = NotearsMLP(dims=[args.d, 10, 1], bias=True)
 
