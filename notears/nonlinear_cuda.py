@@ -2,12 +2,11 @@
 # from notears.lbfgsb_scipy import LBFGSBScipy
 # from notears.trace_expm import trace_expm
 from locally_connected import LocallyConnected
-from lbfgsb_scipy import LBFGSBScipy
 from trace_expm import trace_expm
 import torch
 import torch.nn as nn
+from lbfgsb_scipy import LBFGSBScipy
 import numpy as np
-import math
 import tqdm as tqdm
 from runhelper import *
 from loss_func import *
@@ -60,11 +59,11 @@ class NotearsMLP(nn.Module):
         fc1_weight = self.fc1_pos.weight - self.fc1_neg.weight  # [j * m1, i] 
         fc1_weight = fc1_weight.view(d, -1, d)  # [j, m1, i]
         A = torch.sum(fc1_weight * fc1_weight, dim=1).t()  # [i, j]
-        h = trace_expm(A) - d  # (Zheng et al. 2018)
+        # h = trace_expm(A) - d  # (Zheng et al. 2018)
         # A different formulation, slightly faster at the cost of numerical stability
-        # M = torch.eye(d) + A / d  # (Yu et al. 2019)
-        # E = torch.matrix_power(M, d - 1)
-        # h = (E.t() * M).sum() - d
+        M = torch.eye(d).to(A.device) + A / d  # (Yu et al. 2019)
+        E = torch.matrix_power(M, d - 1)
+        h = (E.t() * M).sum() - d
         return h
 
     def l2_reg(self):
@@ -98,14 +97,14 @@ def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
     """Perform one step of dual ascent in augmented Lagrangian."""
     h_new = None
     optimizer = LBFGSBScipy(model.parameters())
-    X_torch = torch.from_numpy(X)
+    # X_torch = torch.from_numpy(X)
     while rho < rho_max:
         def closure():
             global COUNT
             COUNT += 1
             optimizer.zero_grad()
-            X_hat = model(X_torch)
-            loss = squared_loss(X_hat, X_torch)
+            X_hat = model(X)
+            loss = squared_loss(X_hat, X)
             h_val = model.h_func()
             penalty = 0.5 * rho * h_val * h_val + alpha * h_val
             l2_reg = 0.5 * lambda2 * model.l2_reg()
@@ -152,22 +151,23 @@ def main():
     print(args)
     print('==' * 20)
 
-    torch.set_default_dtype(torch.double)
-    np.set_printoptions(precision=3) 
-
     import utils as ut
     ut.set_random_seed(123)
 
-    # B_true = ut.simulate_dag(args.d, args.s0, args.graph_type)
-    # # np.savetxt('W_true.csv', B_true, delimiter=',')
 
-    # X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
-    # np.savetxt('X.csv', X, delimiter=',')
+    if args.data_type == 'real':
+        X = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs.csv', delimiter=',')
+        B_true = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs_B_true.csv', delimiter=',')
+        model = NotearsMLP(dims=[11, 1], bias=True) # for the real data (sachs)   the nodes of sachs are 11
 
-    X = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs.csv', delimiter=',')
-    B_true = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs_B_true.csv', delimiter=',')
+    elif args.data_type == 'synthetic':
+        B_true = ut.simulate_dag(args.d, args.s0, args.graph_type)
+        X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
+        model = NotearsMLP(dims=[args.d ,10, 1], bias=True) # for the synthetic data
     
-    model = NotearsMLP(dims=[args.d, 10, 1], bias=True)
+    X = torch.from_numpy(X).float().to(args.device)
+    model.to(args.device)
+
     W_est = notears_nonlinear(model, X, args.lambda1, args.lambda2)
     assert ut.is_dag(W_est)
     # np.savetxt('W_est.csv', W_est, delimiter=',')
@@ -177,4 +177,5 @@ def main():
         print('reweighting')
 
 if __name__ == '__main__':
+    torch.set_default_dtype(torch.float32)
     main()
