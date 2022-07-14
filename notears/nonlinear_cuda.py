@@ -10,6 +10,7 @@ import numpy as np
 import tqdm as tqdm
 from runhelper import *
 from loss_func import *
+import random
 
 COUNT = 0
 class NotearsMLP(nn.Module):
@@ -144,6 +145,13 @@ def notears_nonlinear(model: nn.Module,
     return W_est
 
 
+def set_random_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+
 def main():
     # fangfu
     parser = config_parser()
@@ -152,7 +160,7 @@ def main():
     print('==' * 20)
 
     import utils as ut
-    ut.set_random_seed(123)
+    set_random_seed(args.seed)
 
 
     if args.data_type == 'real':
@@ -178,4 +186,5 @@ def main():
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
+    torch.set_printoptions(precision=10)
     main()
