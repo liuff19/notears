@@ -11,6 +11,8 @@ import math
 import tqdm as tqdm
 from runhelper import *
 from loss_func import *
+
+COUNT = 0
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
         super(NotearsMLP, self).__init__()
@@ -170,6 +172,8 @@ def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
     X_torch = torch.from_numpy(X)
     while rho < rho_max:
         def closure():
+            global COUNT
+            COUNT += 1
             optimizer.zero_grad()
             X_hat = model(X_torch)
             loss = squared_loss(X_hat, X_torch)
@@ -179,6 +183,8 @@ def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
             l1_reg = lambda1 * model.fc1_l1_reg()
             primal_obj = loss + penalty + l2_reg + l1_reg
             primal_obj.backward()
+            if COUNT % 100 == 0:
+                print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
             return primal_obj
         optimizer.step(closure)  # NOTE: updates model in-place
         with torch.no_grad():
