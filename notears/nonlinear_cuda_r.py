@@ -11,8 +11,16 @@ import tqdm as tqdm
 from runhelper import *
 from loss_func import *
 import random
+import time
+import igraph as ig
+
+import utils as ut
 
 COUNT = 0
+reweight_cnt = 800
+reweight_ratio = 0.2
+reweight_gama = 1000
+ifreweight = 1
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
         super(NotearsMLP, self).__init__()
@@ -92,6 +100,40 @@ class NotearsMLP(nn.Module):
         W = W.cpu().detach().numpy()  # [i, j]
         return W
 
+def reweighted_loss(output, target, reweight_list, gama):
+    n = target.shape[0]
+
+    # 计算方式0
+    re_output = output[reweight_list]
+    re_target = target[reweight_list]
+    re_R = re_output - re_target
+
+    keep_list = [i for i in range(output.shape[0]) if i not in reweight_list]
+ 
+    keep_output = output[keep_list]
+    keep_target = target[keep_list]
+    R = keep_output - keep_target
+
+    reweight_len = len(reweight_list)
+    assert reweight_len == re_output.shape[0]
+    loss = 0.5 * gama*( re_R** 2).sum()/(re_R.shape[0]) + 0.5 * (R ** 2).sum()/(R.shape[0])
+
+    # re_matrix = torch.eye(n,n).to(target.device)
+    # for idx in reweight_list:
+    #     re_matrix[idx,idx] = gama
+    # R = output-target
+    # # 计算方式1
+    # loss = 0.5 / n * torch.sum(torch.matmul(re_matrix, R) ** 2)
+    # 计算方式2
+    # loss = torch.sum(torch.matmul(re_matrix, R) ** 2)
+    # 计算方式3
+    # loss = 0.5 / (n+(gama-1)*reweight_len)* torch.sum(torch.matmul(re_matrix, R) ** 2)
+    return loss
+
+def sample_loss(output, target):
+    n = target.shape[0]
+    sp_loss = 0.5 / n * ((output - target) ** 2)
+    return sp_loss
 
 
 def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
@@ -112,10 +154,38 @@ def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
             l1_reg = lambda1 * model.fc1_l1_reg()
             primal_obj = loss + penalty + l2_reg + l1_reg
             primal_obj.backward()
-            # if COUNT % 100 == 0:
-            #     print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
             return primal_obj
-        optimizer.step(closure)  # NOTE: updates model in-place
+
+        def r_closure():
+            global COUNT
+            COUNT += 1
+            optimizer.zero_grad()
+            X_hat = model(X)
+            sp_idx = []
+            if COUNT < reweight_cnt:
+                loss = squared_loss(X_hat, X)
+            elif COUNT == reweight_cnt:
+                loss = squared_loss(X_hat, X)
+                sp_loss = sample_loss(X_hat, X)
+                sp_loss = sp_loss.mean(dim=1)
+                _, sp_idx = torch.topk(sp_loss, int(sp_loss.shape[0] * reweight_ratio))
+                print("ready to reweighting")
+            else:
+                loss = reweighted_loss(X_hat, X, sp_idx, reweight_gama)
+
+            h_val = model.h_func()
+            penalty = 0.5 * rho * h_val * h_val + alpha * h_val
+            l2_reg = 0.5 * lambda2 * model.l2_reg()
+            l1_reg = lambda1 * model.fc1_l1_reg()
+            primal_obj = loss + penalty + l2_reg + l1_reg
+            primal_obj.backward()
+            return primal_obj
+
+        if ifreweight:
+            optimizer.step(r_closure)  # NOTE: updates model in-place
+        else:
+            optimizer.step(closure) 
+
         with torch.no_grad():
             h_new = model.h_func().item()
         if h_new > 0.25 * h:
@@ -135,15 +205,48 @@ def notears_nonlinear(model: nn.Module,
                       rho_max: float = 1e+16,
                       w_threshold: float = 0.3):
     rho, alpha, h = 1.0, 0.0, np.inf
-    for _ in tqdm.tqdm(range(max_iter)):
+    start = time.time()
+    tloop = tqdm.tqdm(range(max_iter))
+    for _ in tloop:
         rho, alpha, h = dual_ascent_step(model, X, lambda1, lambda2,
                                          rho, alpha, h, rho_max)
+        with torch.no_grad():
+            loss = squared_loss(model(X), X)
+
+        tloop.set_postfix(loss = loss.item())
         if h <= h_tol or rho >= rho_max:
             break
     W_est = model.fc1_to_adj()
     W_est[np.abs(W_est) < w_threshold] = 0
+    end = time.time()
+    print("time:", end - start)
     return W_est
 
+def is_dag(W):
+    G = ig.Graph.Weighted_Adjacency(W.tolist())
+    return G.is_dag()
+
+
+def compute_acc(model):
+    parser = config_parser()
+    args = parser.parse_args()
+    W_est = model.fc1_to_adj()
+    W_est[np.abs(W_est) < args.w_threshold] = 0
+    _, W_true = getdata(args)
+
+    if not is_dag(W_est):
+        # print("!!! Result is not DAG, Now cut the edge until it's DAG")
+        # Find the smallest threshold that removes all cycle-inducing edges
+        thresholds = np.unique(W_est)
+        for step, t in enumerate(thresholds):
+            # print("Edges/thresh", W_est.sum(), t)
+            to_keep = torch.Tensor(W_est > t + 1e-8).numpy()
+            W_est = W_est * to_keep
+
+            if is_dag(W_est):
+                break
+    acc = ut.count_accuracy(W_true, W_est != 0)
+    return acc
 
 def set_random_seed(seed):
     random.seed(seed)
@@ -152,6 +255,16 @@ def set_random_seed(seed):
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
 
+def getdata(args):
+    if args.data_type == 'real':
+        X = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs.csv', delimiter=',')
+        B_true = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs_B_true.csv', delimiter=',')
+    elif args.data_type == 'synthetic':
+        B_true = ut.simulate_dag(args.d, args.s0, args.graph_type)
+        X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
+
+    return X, B_true
+
 def main():
     # fangfu
     parser = config_parser()
@@ -159,30 +272,39 @@ def main():
     print(args)
     print('==' * 20)
 
-    import utils as ut
     set_random_seed(args.seed)
 
 
     if args.data_type == 'real':
         X = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs.csv', delimiter=',')
         B_true = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs_B_true.csv', delimiter=',')
-        model = NotearsMLP(dims=[11, 1], bias=True) # for the real data (sachs)   the nodes of sachs are 11
+        model = NotearsMLP(dims=[11,10, 1], bias=True) # for the real data (sachs)   the nodes of sachs are 11
 
     elif args.data_type == 'synthetic':
         B_true = ut.simulate_dag(args.d, args.s0, args.graph_type)
         X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
-        model = NotearsMLP(dims=[args.d ,10, 1], bias=True) # for the synthetic data
+        model = NotearsMLP(dims=[args.d,10, 1], bias=True) # for the synthetic data
     
     X = torch.from_numpy(X).float().to(args.device)
     model.to(args.device)
 
     W_est = notears_nonlinear(model, X, args.lambda1, args.lambda2)
-    assert ut.is_dag(W_est)
-    # np.savetxt('W_est.csv', W_est, delimiter=',')
+
+
+    if not is_dag(W_est):
+        print("!!! Result is not DAG, Now cut the edge until it's DAG")
+        thresholds = np.unique(W_est)
+        for step, t in enumerate(thresholds):
+            to_keep = torch.Tensor(W_est > t + 1e-8).numpy()
+            W_est = W_est * to_keep
+
+            if is_dag(W_est):
+                break
+
+
     acc = ut.count_accuracy(B_true, W_est != 0)
     print(acc)
-    if args.reweight:
-        print('reweighting')
+    print(f"total_count:{COUNT}")
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
