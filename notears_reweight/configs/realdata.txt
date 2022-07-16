@@ -1,0 +1,5 @@
+device = 'cpu'
+
+seed = 1
+
+data_type = 'real'

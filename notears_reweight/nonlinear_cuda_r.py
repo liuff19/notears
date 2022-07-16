@@ -1,26 +1,23 @@
-# from notears.locally_connected import LocallyConnected
-# from notears.lbfgsb_scipy import LBFGSBScipy
-# from notears.trace_expm import trace_expm
-from locally_connected import LocallyConnected
-from trace_expm import trace_expm
+from notears.locally_connected import LocallyConnected
+from notears.trace_expm import trace_expm
 import torch
 import torch.nn as nn
-from lbfgsb_scipy import LBFGSBScipy
+from notears.lbfgsb_scipy import LBFGSBScipy
 import numpy as np
 import tqdm as tqdm
-from runhelper import *
-from loss_func import *
+from notears.runhelper import config_parser
+from notears.loss_func import *
 import random
 import time
 import igraph as ig
-
-import utils as ut
+import notears.utils as ut
 
 COUNT = 0
 reweight_cnt = 800
 reweight_ratio = 0.2
 reweight_gama = 1000
 ifreweight = 1
+
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
         super(NotearsMLP, self).__init__()
