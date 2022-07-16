@@ -290,9 +290,9 @@ def main():
     # X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
     # np.savetxt('X.csv', X, delimiter=',')
     # X = np.loadtxt('X.csv', delimiter=',')
-    
-    X = np.loadtxt('X.csv', delimiter=',')
-    B_true = get_sachs_gt()
+
+    X = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs.csv', delimiter=',')
+    B_true = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs_B_true.csv', delimiter=',')
 
     model = NotearsMLP(dims=[args.d, 10, 1], bias=True)
 
@@ -301,6 +301,9 @@ def main():
     # np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)
     print(f'the result w/o reweighting: {acc}')
+    # 将上述打印的内容写入logs文件中
+    with open('/opt/data2/git_fangfu/notears/logs/log1.txt', 'a') as f:
+        f.write(f'{acc}\n')
 
     if args.reweight:
         print('reweighting')
@@ -308,6 +311,8 @@ def main():
         assert ut.is_dag(W_est)
         acc_jtt = ut.count_accuracy(B_true, W_est != 0)
         print(f'the result w/ reweighting: {acc_jtt}')
+        with open('/opt/data2/git_fangfu/notears/logs/log1.txt', 'a') as f:
+            f.write(f'{acc}\n')
 
 
 if __name__ == '__main__':
