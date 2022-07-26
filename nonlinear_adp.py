@@ -93,6 +93,7 @@ class NotearsMLP(nn.Module):
         W = W.cpu().detach().numpy()  # [i, j]
         return W
 
+# TODO: create the adaptive_loss function
 
 
 def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
@@ -129,16 +130,24 @@ def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
 
 def notears_nonlinear(model: nn.Module,
                       X: np.ndarray,
+                      args,
                       lambda1: float = 0.,
                       lambda2: float = 0.,
                       max_iter: int = 100,
                       h_tol: float = 1e-8,
                       rho_max: float = 1e+16,
-                      w_threshold: float = 0.3):
+                      w_threshold: float = 0.3
+                      ):
     rho, alpha, h = 1.0, 0.0, np.inf
-    for _ in tqdm.tqdm(range(max_iter)):
-        rho, alpha, h = dual_ascent_step(model, X, lambda1, lambda2,
+    for j in tqdm.tqdm(range(max_iter)):
+        if j > args.reweight_epoch:
+            print("Re-weighting")
+            rho, alpha, h = dual_ascent_step(model, X, lambda1, lambda2,
                                          rho, alpha, h, rho_max)
+        else:
+            rho, alpha, h = dual_ascent_step(model, X, lambda1, lambda2,
+                                         rho, alpha, h, rho_max)
+        
         if h <= h_tol or rho >= rho_max:
             break
     W_est = model.fc1_to_adj()
@@ -160,7 +169,7 @@ def main():
     print(args)
     print('==' * 20)
 
-    import utils as ut
+    import notears.utils as ut
     set_random_seed(args.seed)
 
 
@@ -177,7 +186,7 @@ def main():
     X = torch.from_numpy(X).float().to(args.device)
     model.to(args.device)
 
-    W_est = notears_nonlinear(model, X, args.lambda1, args.lambda2)
+    W_est = notears_nonlinear(model, X, args, args.lambda1, args.lambda2)
     assert ut.is_dag(W_est)
     # np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)
