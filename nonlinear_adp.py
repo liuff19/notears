@@ -142,6 +142,7 @@ def notears_nonlinear(model: nn.Module,
     for j in tqdm.tqdm(range(max_iter)):
         if j > args.reweight_epoch:
             print("Re-weighting")
+            # TODO: reweight operation here
             rho, alpha, h = dual_ascent_step(model, X, lambda1, lambda2,
                                          rho, alpha, h, rho_max)
         else:
@@ -185,6 +186,8 @@ def main():
     
     X = torch.from_numpy(X).float().to(args.device)
     model.to(args.device)
+    
+    # TODO: 将X装入DataLoader
 
     W_est = notears_nonlinear(model, X, args, args.lambda1, args.lambda2)
     assert ut.is_dag(W_est)
