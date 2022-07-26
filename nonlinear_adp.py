@@ -189,7 +189,6 @@ def main():
     import notears.utils as ut
     set_random_seed(args.seed)
 
-
     if args.data_type == 'real':
         X = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs.csv', delimiter=',')
         B_true = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs_B_true.csv', delimiter=',')
