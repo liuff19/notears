@@ -12,8 +12,12 @@ import time
 import igraph as ig
 import notears.utils as ut
 
+import torch.utils.data as data
 
 COUNT = 0
+parser = config_parser()
+args = parser.parse_args()
+print(args)
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
         super(NotearsMLP, self).__init__()
@@ -94,25 +98,39 @@ class NotearsMLP(nn.Module):
         return W
 
 # TODO: create the adaptive_loss function
+def adaptive_loss(output, target, reweight_idx):
+    R = output-target
+    reweight_matrix = torch.diag(reweight_idx).to(args.device)
+    # loss = 0.5 * torch.sum(torch.matmul(reweight_matrix, R))
+    loss = 0.5 * torch.sum(torch.matmul(reweight_matrix, R**2))
+    return loss
 
-
-def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
+def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max):
     """Perform one step of dual ascent in augmented Lagrangian."""
     h_new = None
     optimizer = LBFGSBScipy(model.parameters())
     # X_torch = torch.from_numpy(X)
     while rho < rho_max:
+        # TODO: the adaptive loss should add here
         def closure():
             global COUNT
             COUNT += 1
             optimizer.zero_grad()
-            X_hat = model(X)
-            loss = squared_loss(X_hat, X)
+
+            primal_obj = torch.tensor(0.).to(args.device)
+            loss = torch.tensor(0.).to(args.device)
+
+            for _ , tmp_x in enumerate(train_loader):
+                batch_x = tmp_x[0].to(args.device)
+                X_hat = model(batch_x)
+                loss += squared_loss(X_hat, batch_x)
+                # primal_obj += squared_loss(X_hat, batch_x)
+            
             h_val = model.h_func()
             penalty = 0.5 * rho * h_val * h_val + alpha * h_val
             l2_reg = 0.5 * lambda2 * model.l2_reg()
             l1_reg = lambda1 * model.fc1_l1_reg()
-            primal_obj = loss + penalty + l2_reg + l1_reg
+            primal_obj += loss + penalty + l2_reg + l1_reg
             primal_obj.backward()
             # if COUNT % 100 == 0:
             #     print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
@@ -130,7 +148,7 @@ def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
 
 def notears_nonlinear(model: nn.Module,
                       X: np.ndarray,
-                      args,
+                      train_loader: data.DataLoader,
                       lambda1: float = 0.,
                       lambda2: float = 0.,
                       max_iter: int = 100,
@@ -143,10 +161,10 @@ def notears_nonlinear(model: nn.Module,
         if j > args.reweight_epoch:
             print("Re-weighting")
             # TODO: reweight operation here
-            rho, alpha, h = dual_ascent_step(model, X, lambda1, lambda2,
+            rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
                                          rho, alpha, h, rho_max)
         else:
-            rho, alpha, h = dual_ascent_step(model, X, lambda1, lambda2,
+            rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
                                          rho, alpha, h, rho_max)
         
         if h <= h_tol or rho >= rho_max:
@@ -165,9 +183,7 @@ def set_random_seed(seed):
 
 def main():
     # fangfu
-    parser = config_parser()
-    args = parser.parse_args()
-    print(args)
+
     print('==' * 20)
 
     import notears.utils as ut
@@ -188,8 +204,10 @@ def main():
     model.to(args.device)
     
     # TODO: 将X装入DataLoader
+    X_data = data.TensorDataset(X)
+    train_loader = data.DataLoader(X_data, batch_size=args.batch_size, shuffle=True)
 
-    W_est = notears_nonlinear(model, X, args, args.lambda1, args.lambda2)
+    W_est = notears_nonlinear(model, X, train_loader, args.lambda1, args.lambda2)
     assert ut.is_dag(W_est)
     # np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)
