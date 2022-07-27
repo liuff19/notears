@@ -21,7 +21,7 @@ class adaptiveMLP(nn.Module):
         x = F.relu(self.fc1(x))
         # x = (self.fc2(x)) + tmp
         x = self.fc2(x)
-        x = F.relu(x)
+        x = F.sigmoid(x)
         x = torch.abs(x)
         x = x/torch.sum(x)
         return x
@@ -40,29 +40,30 @@ class adaptiveMLP(nn.Module):
         reg += torch.sum(self.fc2.weight**2)
         return reg
 
-def adap_reweight_step(model, train_loader, lambda1, W_star, iter_num, lrate):
-    for i, data in enumerate(train_loader):
-        X = data[0]
-        W_star = W_star.to(X.device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=lrate, weight_decay=lambda1)
-        R = X - torch.matmul(X, W_star)
-        R = R.to(X.device)
-        reweight_list = []
-        loop = tqdm.tqdm(range(iter_num))
-        for i in loop:
+def adap_reweight_step(adp_model, train_loader, lambda1, notears_model, epoch_num, lrate):
+    loop = tqdm.tqdm(range(epoch_num))
+    for epoch in loop:
+        for i, data in enumerate(train_loader):
+            X = data[0]
+            # W_star = W_star.to(X.device)
+            with torch.no_grad():
+                X_hat = notears_model(X)
+            optimizer = torch.optim.Adam(adp_model.parameters(), lr=lrate, weight_decay=lambda1)
+            R = X - X_hat
+            R = R.to(X.device)
+            reweight_list = []
             optimizer.zero_grad()
-            reweight_list = model(X)
+            reweight_list = adp_model(R)
             # loss 要加上了l1正则项
-            loss = -0.5*torch.sum(torch.mul(reweight_list, R**2)) + lambda1*model.adaptive_l2_reg()
+            loss = -0.5*torch.sum(torch.mul(reweight_list, R**2)) + lambda1*adp_model.adaptive_l2_reg()
             loss.backward()
             optimizer.step()
             loop.set_postfix(adaptive_loss=loss.item())
-            # for param in model.fc1.parameters():
-            #     # 打印梯度
-            #     print(param.grad)
-        break
-    print(reweight_list.squeeze(1))
-    return reweight_list
+            for param in adp_model.fc1.parameters():
+                # 打印梯度
+                print(param.grad)
+        print(reweight_list.squeeze(1))
+        return reweight_list
 
 
 # 测试上述的模型

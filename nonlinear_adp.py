@@ -1,3 +1,4 @@
+from sympy import re
 from notears.locally_connected import LocallyConnected
 from notears.trace_expm import trace_expm
 import torch
@@ -108,7 +109,7 @@ def adaptive_loss(output, target, reweight_idx):
     R = output-target
     reweight_matrix = torch.diag(reweight_idx).to(args.device)
     # loss = 0.5 * torch.sum(torch.matmul(reweight_matrix, R))
-    loss = 0.5 * torch.sum(torch.matmul(reweight_matrix, R**2))
+    loss = 0.5 * torch.sum(torch.mul(reweight_matrix, R**2))
     return loss
 
 def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, adp_flag, adaptive_model):
@@ -149,10 +150,10 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
                 if adp_flag == False:
                     reweight_list = torch.ones(batch_x.shape[0],1)/batch_x.shape[0]
                     reweight_list = reweight_list.to(args.device)
-                # else:
-                #     with torch.no_grad():
-                #         reweight_list = adaptive_model(batch_x)
-                loss += squared_loss(X_hat, batch_x)
+                else:
+                    with torch.no_grad():
+                        reweight_list = adaptive_model(batch_x)
+                loss += adaptive_loss(X_hat, batch_x, reweight_list)
                 # primal_obj += squared_loss(X_hat, batch_x)
             
             h_val = model.h_func()
@@ -197,6 +198,8 @@ def notears_nonlinear(model: nn.Module,
         if j > args.reweight_epoch:
             print("Re-weighting")
             # TODO: reweight operation here
+            adp_flag = True
+            reweight_idx_tmp = adap_reweight_step(adaptive_model, train_loader, args.adaptive_lambda , model, args.adaptive_epoch, args.adaptive_lr)
             rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
                                          rho, alpha, h, rho_max, adp_flag, adaptive_model)
         else:
