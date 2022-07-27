@@ -13,6 +13,10 @@ import igraph as ig
 import notears.utils as ut
 
 import torch.utils.data as data
+from adaptive_model.adapModel import adaptiveMLP
+from adaptive_model.adapModel import adap_reweight_step
+
+
 
 COUNT = 0
 IF_baseline = 0
@@ -107,13 +111,13 @@ def adaptive_loss(output, target, reweight_idx):
     loss = 0.5 * torch.sum(torch.matmul(reweight_matrix, R**2))
     return loss
 
-def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, adp_flag):
+def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, adp_flag, adaptive_model):
     """Perform one step of dual ascent in augmented Lagrangian."""
     h_new = None
     optimizer = LBFGSBScipy(model.parameters())
     # X_torch = torch.from_numpy(X)
     while rho < rho_max:
-        # TODO: the adaptive loss should add here
+        
         def closure():
             global COUNT
             COUNT += 1
@@ -126,8 +130,8 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             l1_reg = lambda1 * model.fc1_l1_reg()
             primal_obj = loss + penalty + l2_reg + l1_reg
             primal_obj.backward()
-            if COUNT % 100 == 0:
-                print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
+            # if COUNT % 100 == 0:
+            #     print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
             return primal_obj
 
         def r_closure():
@@ -141,6 +145,13 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             for _ , tmp_x in enumerate(train_loader):
                 batch_x = tmp_x[0].to(args.device)
                 X_hat = model(batch_x)
+                # TODO: the adaptive loss should add here
+                if adp_flag == False:
+                    reweight_list = torch.ones(batch_x.shape[0],1)/batch_x.shape[0]
+                    reweight_list = reweight_list.to(args.device)
+                # else:
+                #     with torch.no_grad():
+                #         reweight_list = adaptive_model(batch_x)
                 loss += squared_loss(X_hat, batch_x)
                 # primal_obj += squared_loss(X_hat, batch_x)
             
@@ -170,6 +181,7 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
 
 
 def notears_nonlinear(model: nn.Module,
+                      adaptive_model: nn.Module,
                       X: np.ndarray,
                       train_loader: data.DataLoader,
                       lambda1: float = 0.,
@@ -186,10 +198,10 @@ def notears_nonlinear(model: nn.Module,
             print("Re-weighting")
             # TODO: reweight operation here
             rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
-                                         rho, alpha, h, rho_max, adp_flag)
+                                         rho, alpha, h, rho_max, adp_flag, adaptive_model)
         else:
             rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
-                                         rho, alpha, h, rho_max, adp_flag)
+                                         rho, alpha, h, rho_max, adp_flag, adaptive_model)
         
         if h <= h_tol or rho >= rho_max:
             break
@@ -217,12 +229,14 @@ def main():
         X = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs.csv', delimiter=',')
         B_true = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs_B_true.csv', delimiter=',')
         model = NotearsMLP(dims=[11, 1], bias=True) # for the real data (sachs)   the nodes of sachs are 11
+        adaptive_model = adaptiveMLP(input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1).to(args.device)
 
     elif args.data_type == 'synthetic':
         B_true = ut.simulate_dag(args.d, args.s0, args.graph_type)
         X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
-        model = NotearsMLP(dims=[args.d ,10, 1], bias=True) # for the synthetic data
-    
+        model = NotearsMLP(dims=[args.d ,10, 1], bias=True) # FIXME: the layer of the Notears MLP
+        adaptive_model = adaptiveMLP(input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1).to(args.device)
+
     X = torch.from_numpy(X).float().to(args.device)
     model.to(args.device)
     
@@ -230,7 +244,7 @@ def main():
     X_data = data.TensorDataset(X)
     train_loader = data.DataLoader(X_data, batch_size=args.batch_size, shuffle=True)
 
-    W_est = notears_nonlinear(model, X, train_loader, args.lambda1, args.lambda2)
+    W_est = notears_nonlinear(model, adaptive_model, X, train_loader, args.lambda1, args.lambda2)
     assert ut.is_dag(W_est)
     # np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)
