@@ -105,11 +105,11 @@ class NotearsMLP(nn.Module):
         return W
 
 # TODO: create the adaptive_loss function
-def adaptive_loss(output, target, reweight_idx):
+def adaptive_loss(output, target, reweight_list):
     R = output-target
-    reweight_matrix = torch.diag(reweight_idx).to(args.device)
+    # reweight_matrix = torch.diag(reweight_idx).to(args.device)
     # loss = 0.5 * torch.sum(torch.matmul(reweight_matrix, R))
-    loss = 0.5 * torch.sum(torch.mul(reweight_matrix, R**2))
+    loss = 0.5 * torch.sum(torch.mul(reweight_list, R**2))
     return loss
 
 def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, adp_flag, adaptive_model):
@@ -146,6 +146,7 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             for _ , tmp_x in enumerate(train_loader):
                 batch_x = tmp_x[0].to(args.device)
                 X_hat = model(batch_x)
+                
                 # TODO: the adaptive loss should add here
                 if adp_flag == False:
                     reweight_list = torch.ones(batch_x.shape[0],1)/batch_x.shape[0]
@@ -153,14 +154,14 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
                 else:
                     with torch.no_grad():
                         reweight_list = adaptive_model(batch_x)
-                loss += adaptive_loss(X_hat, batch_x, reweight_list)
-                # primal_obj += squared_loss(X_hat, batch_x)
+                # print(reweight_list.squeeze(1))
+                primal_obj += adaptive_loss(X_hat, batch_x, reweight_list)
             
             h_val = model.h_func()
             penalty = 0.5 * rho * h_val * h_val + alpha * h_val
             l2_reg = 0.5 * lambda2 * model.l2_reg()
             l1_reg = lambda1 * model.fc1_l1_reg()
-            primal_obj += loss + penalty + l2_reg + l1_reg
+            primal_obj += penalty + l2_reg + l1_reg
             primal_obj.backward()
             # if COUNT % 100 == 0:
             #     print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
