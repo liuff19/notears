@@ -15,6 +15,8 @@ import notears.utils as ut
 import torch.utils.data as data
 
 COUNT = 0
+IF_baseline = 0
+
 parser = config_parser()
 args = parser.parse_args()
 print(args)
@@ -105,7 +107,7 @@ def adaptive_loss(output, target, reweight_idx):
     loss = 0.5 * torch.sum(torch.matmul(reweight_matrix, R**2))
     return loss
 
-def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max):
+def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, adp_flag):
     """Perform one step of dual ascent in augmented Lagrangian."""
     h_new = None
     optimizer = LBFGSBScipy(model.parameters())
@@ -151,7 +153,12 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             # if COUNT % 100 == 0:
             #     print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
             return primal_obj
-        optimizer.step(closure)  # NOTE: updates model in-place
+
+        if IF_baseline:
+            optimizer.step(closure)  # NOTE: updates model in-place
+        else:                        # NOTE: the adaptive reweight operation
+            optimizer.step(r_closure)
+
         with torch.no_grad():
             h_new = model.h_func().item()
         if h_new > 0.25 * h:
@@ -173,15 +180,16 @@ def notears_nonlinear(model: nn.Module,
                       w_threshold: float = 0.3
                       ):
     rho, alpha, h = 1.0, 0.0, np.inf
+    adp_flag = False
     for j in tqdm.tqdm(range(max_iter)):
         if j > args.reweight_epoch:
             print("Re-weighting")
             # TODO: reweight operation here
             rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
-                                         rho, alpha, h, rho_max)
+                                         rho, alpha, h, rho_max, adp_flag)
         else:
             rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
-                                         rho, alpha, h, rho_max)
+                                         rho, alpha, h, rho_max, adp_flag)
         
         if h <= h_tol or rho >= rho_max:
             break
