@@ -116,6 +116,22 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             global COUNT
             COUNT += 1
             optimizer.zero_grad()
+            X_hat = model(X)
+            loss = squared_loss(X_hat, X)
+            h_val = model.h_func()
+            penalty = 0.5 * rho * h_val * h_val + alpha * h_val
+            l2_reg = 0.5 * lambda2 * model.l2_reg()
+            l1_reg = lambda1 * model.fc1_l1_reg()
+            primal_obj = loss + penalty + l2_reg + l1_reg
+            primal_obj.backward()
+            if COUNT % 100 == 0:
+                print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
+            return primal_obj
+
+        def r_closure():
+            global COUNT
+            COUNT += 1
+            optimizer.zero_grad()
 
             primal_obj = torch.tensor(0.).to(args.device)
             loss = torch.tensor(0.).to(args.device)
