@@ -12,6 +12,7 @@ class adaptiveMLP(nn.Module):
         self.fc1 = nn.Linear(input_size, hidden_size, bias=bias)
         self.fc2 = nn.Linear(hidden_size, output_size, bias=bias)
         self.sigmoid = nn.Sigmoid()
+        # self.norm = nn.L2Norm(p=2, dim=1)
         # 是否针对relu函数的权重初始化
         nn.init.kaiming_normal_(self.fc1.weight)
         nn.init.kaiming_normal_(self.fc2.weight)
