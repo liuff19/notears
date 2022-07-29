@@ -14,8 +14,8 @@ class adaptiveMLP(nn.Module):
         self.sigmoid = nn.Sigmoid()
         # self.norm = nn.L2Norm(p=2, dim=1)
         # 是否针对relu函数的权重初始化
-        nn.init.kaiming_normal_(self.fc1.weight)
-        nn.init.kaiming_normal_(self.fc2.weight)
+        # nn.init.kaiming_normal_(self.fc1.weight)
+        # nn.init.kaiming_normal_(self.fc2.weight)
 
 
     def forward(self, x):
@@ -55,7 +55,7 @@ def adap_reweight_step(adp_model, train_loader, lambda1, notears_model, epoch_nu
             R = R.to(X.device)
             reweight_list = []
             optimizer.zero_grad()
-            reweight_list = adp_model(R)
+            reweight_list = adp_model(X) # FIXME: 注意这里的输入和在主函数训练的输入的一致性，要么都是R,要么都是X
             # loss 要加上了l1正则项
             loss = -0.5*torch.sum(torch.mul(reweight_list, R**2)) + lambda1*adp_model.adaptive_l2_reg()
             loss.backward()
