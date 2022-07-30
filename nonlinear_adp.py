@@ -6,7 +6,6 @@ import torch.nn as nn
 from notears.lbfgsb_scipy import LBFGSBScipy
 import numpy as np
 import tqdm as tqdm
-from notears.runhelper import config_parser
 from notears.loss_func import *
 import random
 import time
@@ -16,7 +15,7 @@ import notears.utils as ut
 import torch.utils.data as data
 from adaptive_model.adapModel import adaptiveMLP
 from adaptive_model.adapModel import adap_reweight_step
-
+from runhelps.runhelper import config_parser
 
 
 COUNT = 0
