@@ -153,7 +153,9 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
                     reweight_list = reweight_list.to(args.device)
                 else:
                     with torch.no_grad():
+                        model.eval()
                         reweight_list = adaptive_model((batch_x-X_hat)**2)
+                    model.train()
                 # print(reweight_list.squeeze(1))
                 primal_obj += adaptive_loss(X_hat, batch_x, reweight_list)
             
@@ -212,6 +214,7 @@ def notears_nonlinear(model: nn.Module,
             break
     W_est = model.fc1_to_adj()
     W_est[np.abs(W_est) < w_threshold] = 0
+    # TODO: 打印fit不好的结果和相关信息
     return W_est
 
 
@@ -221,6 +224,14 @@ def set_random_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
+
+def hard_mining(data, model, loss_func, ratio = 0.1, ):
+    """
+    data: (N_observations, nodes)
+    """
+    N_sample = data.shape[0]
+    model.eval()
+    
 
 def main():
     # fangfu
@@ -241,13 +252,19 @@ def main():
         X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
         model = NotearsMLP(dims=[args.d ,10, 1], bias=True) # FIXME: the layer of the Notears MLP
         adaptive_model = adaptiveMLP(args.batch_size, input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1).to(args.device)
+    
+    elif args.data_type == 'testing':
+        B_true = np.loadtxt('testing_B_true.csv', delimiter=',')
+        X = np.loadtxt('testing_X.csv', delimiter=',')
+        model = NotearsMLP(dims=[args.d ,10, 1], bias=True) # FIXME: the layer of the Notears MLP
+        adaptive_model = adaptiveMLP(args.batch_size, input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1).to(args.device)
 
     X = torch.from_numpy(X).float().to(args.device)
     model.to(args.device)
     
     # TODO: 将X装入DataLoader
     X_data = data.TensorDataset(X)
-    train_loader = data.DataLoader(X_data, batch_size=args.batch_size, shuffle=True)
+    train_loader = data.DataLoader(X_data, batch_size=args.batch_size, shuffle=False)
 
     W_est = notears_nonlinear(model, adaptive_model, X, train_loader, args.lambda1, args.lambda2)
     assert ut.is_dag(W_est)
