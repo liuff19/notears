@@ -8,14 +8,19 @@ import tqdm as tqdm
 
 class adaptiveMLP(nn.Module):
     # TODO: implementation ：平滑处理设计
-    def __init__(self, input_size, hidden_size, output_size, bias=True):
+    def __init__(self, batch, input_size, hidden_size, output_size, bias=True):
         super(adaptiveMLP, self).__init__()
         self.fc1 = nn.Linear(input_size, hidden_size, bias=bias)
         self.fc2 = nn.Linear(hidden_size, output_size, bias=bias)
         self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax(dim=0)
         # 定义带有温度系数的softmax
         self.softmax_temp = nn.Softmax(dim=0)
-        self.t = 10
+        # 将 noise = tf.random_uniform(tf.shape(logits), seed=11) 从tensorflow翻译成pytorch
+        # noise 是从random uniform distribution中随机抽取的一个tensor
+        self.noise = torch.rand(batch,1)
+        self.eps = torch.tensor(1e-6)
+        self.t = 120
         # self.norm = nn.L2Norm(p=2, dim=1)
         # 是否针对relu函数的权重初始化
         nn.init.kaiming_normal_(self.fc1.weight)
@@ -27,7 +32,14 @@ class adaptiveMLP(nn.Module):
         x = F.relu(self.fc1(x))
         # x = (self.fc2(x)) + tmp
         x = self.fc2(x)
-        # x = F.relu(x)
+        x = F.relu(x)
+        # 对x进行减均值除以标准差
+        # x = self.sigmoid(x)
+        # x = x - torch.mean(x)
+        # x = x / torch.std(x)
+       
+        x = x - torch.log(-torch.log(self.noise))
+        # x = x - self.noise
         x = self.softmax_temp(x/self.t)
         # x = torch.abs(x)
         # x = x/torch.sum(x)
@@ -55,7 +67,7 @@ def adap_reweight_step(adp_model, train_loader, lambda1, notears_model, epoch_nu
             # W_star = W_star.to(X.device)
             with torch.no_grad():
                 X_hat = notears_model(X)
-            optimizer = torch.optim.Adam(adp_model.parameters(), lr=lrate, weight_decay=lambda1)
+            optimizer = torch.optim.Adam(adp_model.parameters(), lr=lrate)
             R = X - X_hat
             R = R.to(X.device)
             reweight_list = []
@@ -94,7 +106,7 @@ if __name__ == '__main__':
     X1_data = dataset.TensorDataset(X)
     train_loader1 = dataset.DataLoader(X1_data, batch_size=100, shuffle=True)
 
-    model = adaptiveMLP(input_size=X.shape[1], hidden_size=X.shape[1], output_size=1)
+    model = adaptiveMLP(100, input_size=X.shape[1], hidden_size=X.shape[1], output_size=1)
     W_star = torch.randn(10, 10)
     # 调用上述函数，进行模型的训练
     M = adap_reweight_step(model, train_loader1, lambda1=0.1, notears_model=model, epoch_num=1000, lrate = 0.001)
