@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import tqdm as tqdm
-
+from torch.utils.tensorboard import SummaryWriter
 class adaptiveMLP(nn.Module):
     # TODO: implementation ：平滑处理设计
     def __init__(self, batch, input_size, hidden_size, output_size, bias=True):
@@ -20,7 +20,7 @@ class adaptiveMLP(nn.Module):
         # noise 是从random uniform distribution中随机抽取的一个tensor
         self.noise = torch.rand(batch,1)
         self.eps = torch.tensor(1e-6)
-        self.t = 120
+        self.t = 20
         # self.norm = nn.L2Norm(p=2, dim=1)
         # 是否针对relu函数的权重初始化
         nn.init.kaiming_normal_(self.fc1.weight)
@@ -82,10 +82,15 @@ def adap_reweight_step(adp_model, train_loader, lambda1, notears_model, epoch_nu
             #     # 打印梯度
             #     print(param.grad)
 
-    print(f'平均值：{torch.mean(reweight_list)}')
-    print(f'最大值：{torch.max(reweight_list).item()}')
-    print(f'最小值：{torch.min(reweight_list).item()}')
-        
+    print(f'avg:{torch.mean(reweight_list)}')
+    print(f'max:{torch.max(reweight_list).item()}')
+    print(f'min:{torch.min(reweight_list).item()}')
+    
+    writer = SummaryWriter('logs/adaptive_model')
+    reweight_list = reweight_list.squeeze()
+    reweight_list = reweight_list.tolist()
+    for i in range(len(reweight_list)):
+        writer.add_scalar('reweight_list', reweight_list[i], i)
     return reweight_list
 
 
