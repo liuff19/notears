@@ -153,7 +153,7 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
                     reweight_list = reweight_list.to(args.device)
                 else:
                     with torch.no_grad():
-                        reweight_list = adaptive_model(batch_x)
+                        reweight_list = adaptive_model((batch_x-X_hat)**2)
                 # print(reweight_list.squeeze(1))
                 primal_obj += adaptive_loss(X_hat, batch_x, reweight_list)
             
@@ -200,7 +200,8 @@ def notears_nonlinear(model: nn.Module,
             print("Re-weighting")
             # TODO: reweight operation here
             adp_flag = True
-            reweight_idx_tmp = adap_reweight_step(adaptive_model, train_loader, args.adaptive_lambda , model, args.adaptive_epoch, args.adaptive_lr)
+            if not IF_baseline:
+                reweight_idx_tmp = adap_reweight_step(adaptive_model, train_loader, args.adaptive_lambda , model, args.adaptive_epoch, args.adaptive_lr)
             rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
                                          rho, alpha, h, rho_max, adp_flag, adaptive_model)
         else:
@@ -239,7 +240,7 @@ def main():
         B_true = ut.simulate_dag(args.d, args.s0, args.graph_type)
         X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
         model = NotearsMLP(dims=[args.d ,10, 1], bias=True) # FIXME: the layer of the Notears MLP
-        adaptive_model = adaptiveMLP(input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1).to(args.device)
+        adaptive_model = adaptiveMLP(args.batch_size, input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1).to(args.device)
 
     X = torch.from_numpy(X).float().to(args.device)
     model.to(args.device)
