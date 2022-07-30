@@ -22,16 +22,16 @@ def config_parser():
     parser.add_argument('--beta', type=float, default=0.9, help='beta')
     
     parser.add_argument("--w_threshold", default=0.3, type=float)
-    parser.add_argument("--data_type", default='synthetic', type=str, help = 'real or synthetic')
+    parser.add_argument("--data_type", default='testing', type=str, help = 'real or synthetic', choices=['real', 'synthetic','testing'])
 
 
     # TODO: add the arguments for adapitve reweight
     # add the batch_size
-    parser.add_argument('--batch_size', type=int, default=200, help='batch_size')
+    parser.add_argument('--batch_size', type=int, default=1000, help='batch_size')
     parser.add_argument('--reweight_epoch', type=int, default=0, help='the epoch begin to reweight')
 
     parser.add_argument("--adaptive_epoch", default=10, type=int, help="number of iterations for adaptive reweight")
     parser.add_argument("--adaptive_lr", default=0.0001, type=float, help="learning rate for adaptive reweight")
-    parser.add_argument("--adaptive_lambda", default=0.00000000001, type=float, help="adaptive lambda for l1 regularization")    
+    parser.add_argument("--adaptive_lambda", default=0.001, type=float, help="adaptive lambda for l1 regularization")    
 
     return parser
