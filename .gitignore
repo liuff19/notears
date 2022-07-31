@@ -107,3 +107,4 @@ venv.bak/
 logs
 runhelps
 .gitignore
+my_experiment
