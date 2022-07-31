@@ -1,3 +1,4 @@
+from cProfile import run
 from sympy import re
 from notears.locally_connected import LocallyConnected
 from notears.trace_expm import trace_expm
@@ -11,15 +12,17 @@ import random
 import time
 import igraph as ig
 import notears.utils as ut
-
+from notears.loss_func import *
 import torch.utils.data as data
 from adaptive_model.adapModel import adaptiveMLP
 from adaptive_model.adapModel import adap_reweight_step
-from runhelps.runhelper import config_parser
 
+from runhelps.runhelper import config_parser
+from torch.utils.tensorboard import SummaryWriter
 
 COUNT = 0
-IF_baseline = 0
+IF_baseline = 1
+IF_figure = 0
 
 parser = config_parser()
 args = parser.parse_args()
@@ -111,6 +114,28 @@ def adaptive_loss(output, target, reweight_list):
     loss = 0.5 * torch.sum(torch.mul(reweight_list, R**2))
     return loss
 
+def record_weight(reweight_list, cnt, hard_list=[26,558,550,326,915], easy_list=[859,132,82,80,189]):
+    writer = SummaryWriter('logs/weight_record_real')
+    reweight_idx = reweight_list.squeeze()
+    reweight_idx = reweight_idx.tolist()
+    for idx in hard_list:
+        writer.add_scalar(f'hard_real/hard_reweight_list[{idx}]', reweight_idx[idx], cnt)
+    for idx in easy_list:
+        writer.add_scalar(f'easy_real/easy_reweight_list[{idx}]', reweight_idx[idx], cnt) 
+
+def record_distribution(reweight_list,j):
+    writer = SummaryWriter('logs/distribution_record')
+    reweight_idx = reweight_list.squeeze()
+    reweight_idx = reweight_idx.tolist()
+    for i in range(len(reweight_idx)):
+        writer.add_scalar(f'weight_distribution_step{j}', reweight_list[i], i)
+    # 画出reweight_idx的分布图
+    import matplotlib.pyplot as plt
+    # 画出reweight_idx的箱型图
+    plt.boxplot(reweight_idx)
+    # 保存图片
+    plt.savefig(f'logs/box_plot{j}.png')
+    
 def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, adp_flag, adaptive_model):
     """Perform one step of dual ascent in augmented Lagrangian."""
     h_new = None
@@ -154,6 +179,10 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
                     with torch.no_grad():
                         model.eval()
                         reweight_list = adaptive_model((batch_x-X_hat)**2)
+                    # TODO: record the reweight
+                    if IF_figure:
+                        record_weight(reweight_list=reweight_list, cnt=COUNT, hard_list=[748,181,276,151,355,137,846,671], easy_list=[802,673,317,192,167])
+                   
                     model.train()
                 # print(reweight_list.squeeze(1))
                 primal_obj += adaptive_loss(X_hat, batch_x, reweight_list)
@@ -203,6 +232,13 @@ def notears_nonlinear(model: nn.Module,
             adp_flag = True
             if not IF_baseline:
                 reweight_idx_tmp = adap_reweight_step(adaptive_model, train_loader, args.adaptive_lambda , model, args.adaptive_epoch, args.adaptive_lr)
+                # TODO: record the distribution
+                print(reweight_idx_tmp.squeeze().tolist()[0:10])
+                # print the index of the maxiumum value
+                print(reweight_idx_tmp.squeeze().tolist().index(max(reweight_idx_tmp.squeeze().tolist())))
+                if IF_figure:
+                    record_distribution(reweight_idx_tmp,j)
+                
             rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
                                          rho, alpha, h, rho_max, adp_flag, adaptive_model)
         else:
@@ -214,7 +250,11 @@ def notears_nonlinear(model: nn.Module,
     W_est = model.fc1_to_adj()
     W_est[np.abs(W_est) < w_threshold] = 0
     # TODO: 打印fit不好的结果和相关信息
-    return W_est
+    hard_index, easy_index = hard_mining(X, model, single_loss, ratio=0.01)
+    # 分别将hard和easy的索引保存到txt文件中
+    # np.savetxt(f'hard{args.seed}.txt', hard_index, fmt='%d')
+    # np.savetxt(f'easy{args.seed}.txt', easy_index, fmt='%d')
+    return W_est, hard_index, easy_index
 
 
 def set_random_seed(seed):
@@ -224,13 +264,20 @@ def set_random_seed(seed):
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
 
-def hard_mining(data, model, loss_func, ratio = 0.1, ):
+def hard_mining(data, model, loss_func, ratio = 0.01):
     """
     data: (N_observations, nodes)
     """
     N_sample = data.shape[0]
     model.eval()
-    
+    data_hat = model(data)
+    loss_col = loss_func(data_hat, data)
+    loss_col = torch.sum(loss_col, dim=1)
+    loss_col = loss_col.cpu().detach().numpy()
+    # 找出最大ratio的loss_col的index
+    hard_index_list = np.argsort(loss_col)[::-1][:int(N_sample * ratio)]
+    easy_index_list = np.argsort(loss_col)[:int(N_sample * ratio)]
+    return hard_index_list, easy_index_list
 
 def main():
     # fangfu
@@ -241,15 +288,17 @@ def main():
     set_random_seed(args.seed)
 
     if args.data_type == 'real':
-        X = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs.csv', delimiter=',')
-        B_true = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs_B_true.csv', delimiter=',')
+        # X = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs.csv', delimiter=',')
+        X = np.loadtxt('/opt/data2/git_fangfu/notears/sachs_data/sachs.csv', delimiter=',')
+       
+        B_true = np.loadtxt('/opt/data2/git_fangfu/notears/sachs_data/sachs_B_true.csv', delimiter=',')
         model = NotearsMLP(dims=[11, 1], bias=True) # for the real data (sachs)   the nodes of sachs are 11
-        adaptive_model = adaptiveMLP(input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1).to(args.device)
+        adaptive_model = adaptiveMLP(args.batch_size, input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1).to(args.device)
 
     elif args.data_type == 'synthetic':
         B_true = ut.simulate_dag(args.d, args.s0, args.graph_type)
         X = ut.simulate_nonlinear_sem(B_true, args.n, args.sem_type)
-        model = NotearsMLP(dims=[args.d ,10, 1], bias=True) # FIXME: the layer of the Notears MLP
+        model = NotearsMLP(dims=[args.d, 10, 1], bias=True) # FIXME: the layer of the Notears MLP
         adaptive_model = adaptiveMLP(args.batch_size, input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1).to(args.device)
     
     elif args.data_type == 'testing':
@@ -263,13 +312,21 @@ def main():
     
     # TODO: 将X装入DataLoader
     X_data = data.TensorDataset(X)
-    train_loader = data.DataLoader(X_data, batch_size=args.batch_size, shuffle=False)
+    train_loader = data.DataLoader(X_data, batch_size=args.batch_size, shuffle=True)
 
-    W_est = notears_nonlinear(model, adaptive_model, X, train_loader, args.lambda1, args.lambda2)
+    W_est , _, _= notears_nonlinear(model, adaptive_model, X, train_loader, args.lambda1, args.lambda2)
     assert ut.is_dag(W_est)
     # np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)
     print(acc)
+    # 根据args.d和args.s0生成文件夹
+    import os
+    if not os.path.exists(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}'):
+        os.makedirs(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}')
+    
+    # 将acc写入文件my_experiment/{args.d}_{args.s0}/{args.seed}.txt中
+    
+    
     if args.reweight:
         print('reweighting')
 
