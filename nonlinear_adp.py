@@ -19,9 +19,10 @@ from adaptive_model.adapModel import adap_reweight_step
 
 from runhelps.runhelper import config_parser
 from torch.utils.tensorboard import SummaryWriter
+from sachs_data.load_sachs import *
 
 COUNT = 0
-IF_baseline = 0
+IF_baseline = 1
 IF_figure = 0
 
 parser = config_parser()
@@ -288,7 +289,6 @@ def main():
     if args.data_type == 'real':
         # X = np.loadtxt('/opt/data2/git_fangfu/JTT_CD/data/sachs.csv', delimiter=',')
         X = np.loadtxt('/opt/data2/git_fangfu/notears/sachs_data/sachs.csv', delimiter=',')
-       
         B_true = np.loadtxt('/opt/data2/git_fangfu/notears/sachs_data/sachs_B_true.csv', delimiter=',')
         model = NotearsMLP(dims=[11, 1], bias=True) # for the real data (sachs)   the nodes of sachs are 11
         adaptive_model = adaptiveMLP(args.batch_size, input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1, temperature=args.temperature).to(args.device)
@@ -304,7 +304,13 @@ def main():
         X = np.loadtxt('testing_X.csv', delimiter=',')
         model = NotearsMLP(dims=[args.d ,10, 1], bias=True) # FIXME: the layer of the Notears MLP
         adaptive_model = adaptiveMLP(args.batch_size, input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1, temperature=args.temperature).to(args.device)
-
+    
+    elif args.data_type == 'sachs_full':
+        X = np.loadtxt('/opt/data2/git_fangfu/notears/sachs_data/sachs7466.csv', delimiter=',')
+        B_true = np.loadtxt('/opt/data2/git_fangfu/notears/sachs_data/sachs_B_true.csv', delimiter=',')
+        model = NotearsMLP(dims=[11, 1], bias=True) # for the real data (sachs)   the nodes of sachs are 11
+        adaptive_model = adaptiveMLP(args.batch_size, input_size=X.shape[-1], hidden_size= X.shape[-1] , output_size=1, temperature=args.temperature).to(args.device)
+        
     X = torch.from_numpy(X).float().to(args.device)
     model.to(args.device)
     
@@ -323,14 +329,15 @@ def main():
         os.makedirs(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}')
     # 创建该'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/{args.seed}.txt'该文件
 
-    with open(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/seed_{args.seed}.txt', 'a') as f:
-        f.write(f'ifbaseline: {IF_baseline}\n')
-        if not IF_baseline:
-            f.write(f'temperature: {args.temperature}\n')
-            f.write(f'batch_size:{args.batch_size}\n')
-        f.write(f'dataset_type:{args.data_type}\n')
-        f.write(f'acc:{acc}\n')
-        f.write('-----------------------------------------------------\n')
+    if args.data_type == 'synthetic':
+        with open(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/seed_{args.seed}.txt', 'a') as f:
+            f.write(f'ifbaseline: {IF_baseline}\n')
+            if not IF_baseline:
+                f.write(f'temperature: {args.temperature}\n')
+                f.write(f'batch_size:{args.batch_size}\n')
+            f.write(f'dataset_type:{args.data_type}\n')
+            f.write(f'acc:{acc}\n')
+            f.write('-----------------------------------------------------\n')
     
     if args.reweight:
         print('reweighting')
