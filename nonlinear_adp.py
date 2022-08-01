@@ -327,6 +327,7 @@ def main():
         f.write(f'ifbaseline: {IF_baseline}\n')
         if not IF_baseline:
             f.write(f'temperature: {args.temperature}\n')
+            f.write(f'batch_size:{args.batch_size}\n')
         f.write(f'dataset_type:{args.data_type}\n')
         f.write(f'acc:{acc}\n')
         f.write('-----------------------------------------------------\n')
