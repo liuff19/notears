@@ -22,7 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 from sachs_data.load_sachs import *
 
 COUNT = 0
-IF_baseline = 1
+IF_baseline = 0
 IF_figure = 0
 
 parser = config_parser()
