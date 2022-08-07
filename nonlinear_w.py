@@ -22,7 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 from sachs_data.load_sachs import *
 
 COUNT = 0
-IF_baseline = 1
+IF_baseline = 0 # 0: reweight + batch ; 1: baseline; 2: batch + baseline
 IF_figure = 0
 
 parser = config_parser()
@@ -171,11 +171,35 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             # if COUNT % 100 == 0:
             #     print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
             return primal_obj
+        
+        def batch_closure():
+            global COUNT
+            COUNT += 1
+            optimizer.zero_grad()
 
-        if IF_baseline:
+            primal_obj = torch.tensor(0.).to(args.device)
+            loss = torch.tensor(0.).to(args.device)
+
+            for _ , tmp_x in enumerate(train_loader):
+                batch_x = tmp_x[0].to(args.device)
+                X_hat = model(batch_x)
+                primal_obj += squared_loss(X_hat, batch_x)
+            
+            h_val = model.h_func()
+            penalty = 0.5 * rho * h_val * h_val + alpha * h_val
+            l2_reg = 0.5 * lambda2 * model.l2_reg()
+            l1_reg = lambda1 * model.fc1_l1_reg()
+            primal_obj += penalty + l2_reg + l1_reg
+            primal_obj.backward()
+            
+            return primal_obj
+        
+        if IF_baseline == 1:
             optimizer.step(closure)  # NOTE: updates model in-place
-        else:                        # NOTE: the adaptive reweight operation
+        elif IF_baseline == 0 :                        # NOTE: the adaptive reweight operation
             optimizer.step(r_closure)
+        elif IF_baseline == 2:
+            optimizer.step(batch_closure)
 
         with torch.no_grad():
             h_new = model.h_func().item()
