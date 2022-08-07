@@ -110,7 +110,6 @@ class NotearsMLP(nn.Module):
         W = W.cpu().detach().numpy()  # [i, j]
         return W
 
-# TODO: create the adaptive_loss function
 def adaptive_loss(output, target, reweight_list):
     R = output-target
     # reweight_matrix = torch.diag(reweight_idx).to(args.device)
@@ -152,8 +151,7 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             for _ , tmp_x in enumerate(train_loader):
                 batch_x = tmp_x[0].to(args.device)
                 X_hat = model(batch_x)
-                
-                # TODO: the adaptive loss should add here
+            
                 if adp_flag == False:
                     reweight_list = torch.ones(batch_x.shape[0],1)/batch_x.shape[0]
                     reweight_list = reweight_list.to(args.device)
@@ -171,8 +169,7 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             l1_reg = lambda1 * model.fc1_l1_reg()
             primal_obj += penalty + l2_reg + l1_reg
             primal_obj.backward()
-            # if COUNT % 100 == 0:
-            #     print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
+
             return primal_obj
         
         def batch_closure():
@@ -251,15 +248,11 @@ def notears_nonlinear(model: nn.Module,
     adp_flag = False
     for j in tqdm.tqdm(range(max_iter)):
         if j > args.reweight_epoch:
-            print("Re-weighting")
             # TODO: reweight operation here
             adp_flag = True
-            if not IF_baseline:
+            if IF_baseline==0:
+                print("Re-weighting")
                 reweight_idx_tmp = adap_reweight_step(adaptive_model, train_loader, args.adaptive_lambda , model, args.adaptive_epoch, args.adaptive_lr)
-                # TODO: record the distribution
-                
-                if IF_figure:
-                    record_distribution(reweight_idx_tmp,j)
                 
             rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
                                          rho, alpha, h, rho_max, adp_flag, adaptive_model)
@@ -271,12 +264,7 @@ def notears_nonlinear(model: nn.Module,
             break
     W_est = model.fc1_to_adj()
     W_est[np.abs(W_est) < w_threshold] = 0
-    # TODO: 打印fit不好的结果和相关信息
-    hard_index, easy_index = hard_mining(X, model, single_loss, ratio=0.01)
-    # 分别将hard和easy的索引保存到txt文件中
-    # np.savetxt(f'hard{args.seed}.txt', hard_index, fmt='%d')
-    # np.savetxt(f'easy{args.seed}.txt', easy_index, fmt='%d')
-    return W_est, hard_index, easy_index
+    return W_est
 
 
 def set_random_seed(seed):
@@ -341,7 +329,7 @@ def main():
     X_data = data.TensorDataset(X)
     train_loader = data.DataLoader(X_data, batch_size=args.batch_size, shuffle=True)
 
-    W_est , _, _= notears_nonlinear(model, adaptive_model, X, train_loader, args.lambda1, args.lambda2)
+    W_est = notears_nonlinear(model, adaptive_model, X, train_loader, args.lambda1, args.lambda2)
     assert ut.is_dag(W_est)
     # np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)
