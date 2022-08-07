@@ -140,8 +140,10 @@ def adaptive_loss(output, target, reweight_list):
     loss = 0.5 * torch.sum(torch.mul(reweight_list, R**2))
     return loss
 
-# TODO: we need to pay attention to the axis of the average
+
 def wasserstein_loss(x_distribution, wx_distribution):
+    # TODO: we need to pay attention to the axis of the average
+    # TODO: check the correctness of the loss function
     return (torch.mean(x_distribution, axis = 0) - torch.mean(wx_distribution, axis = 0)).sum()
     
 def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, adp_flag, adaptive_model):
@@ -255,7 +257,8 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
                 x_distribution = model.forward__(batch_x)
                 wx_distribution = model.forward__(model(batch_x))
                 loss_D += wasserstein_loss(x_distribution, wx_distribution)
-                
+                # if COUNT % 10 == 0:
+                #     print(loss_D)
             h_val = model.h_func()
             penalty = 0.5 * rho * h_val * h_val + alpha * h_val
             l2_reg = 0.5 * lambda2 * model.l2_reg()
