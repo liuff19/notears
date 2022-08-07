@@ -22,7 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 from sachs_data.load_sachs import *
 
 COUNT = 0
-IF_baseline = 0
+IF_baseline = 1
 IF_figure = 0
 
 parser = config_parser()
@@ -115,27 +115,7 @@ def adaptive_loss(output, target, reweight_list):
     loss = 0.5 * torch.sum(torch.mul(reweight_list, R**2))
     return loss
 
-def record_weight(reweight_list, cnt, hard_list=[26,558,550,326,915], easy_list=[859,132,82,80,189]):
-    writer = SummaryWriter('logs/weight_record_real')
-    reweight_idx = reweight_list.squeeze()
-    reweight_idx = reweight_idx.tolist()
-    for idx in hard_list:
-        writer.add_scalar(f'hard_real/hard_reweight_list[{idx}]', reweight_idx[idx], cnt)
-    for idx in easy_list:
-        writer.add_scalar(f'easy_real/easy_reweight_list[{idx}]', reweight_idx[idx], cnt) 
 
-def record_distribution(reweight_list,j):
-    writer = SummaryWriter('logs/distribution_record')
-    reweight_idx = reweight_list.squeeze()
-    reweight_idx = reweight_idx.tolist()
-    for i in range(len(reweight_idx)):
-        writer.add_scalar(f'weight_distribution_step{j}', reweight_list[i], i)
-    # 画出reweight_idx的分布图
-    import matplotlib.pyplot as plt
-    # 画出reweight_idx的箱型图
-    plt.boxplot(reweight_idx)
-    # 保存图片
-    plt.savefig(f'logs/box_plot{j}.png')
     
 def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, adp_flag, adaptive_model):
     """Perform one step of dual ascent in augmented Lagrangian."""
@@ -156,8 +136,6 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             l1_reg = lambda1 * model.fc1_l1_reg()
             primal_obj = loss + penalty + l2_reg + l1_reg
             primal_obj.backward()
-            # if COUNT % 100 == 0:
-            #     print(f"{primal_obj}: {primal_obj.item():.4f}; count: {COUNT}")
             return primal_obj
 
         def r_closure():
@@ -180,10 +158,6 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
                     with torch.no_grad():
                         model.eval()
                         reweight_list = adaptive_model((batch_x-X_hat)**2)
-                    # TODO: record the reweight
-                    if IF_figure:
-                        record_weight(reweight_list=reweight_list, cnt=COUNT, hard_list=[748,181,276,151,355,137,846,671], easy_list=[802,673,317,192,167])
-                   
                     model.train()
                 # print(reweight_list.squeeze(1))
                 primal_obj += adaptive_loss(X_hat, batch_x, reweight_list)
