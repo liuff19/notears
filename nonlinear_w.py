@@ -20,9 +20,10 @@ from adaptive_model.adapModel import adap_reweight_step
 from runhelps.runhelper import config_parser
 from torch.utils.tensorboard import SummaryWriter
 from sachs_data.load_sachs import *
+import torch.optim as optim
 
 COUNT = 0
-IF_baseline = 1 # 0: reweight + batch ; 1: baseline; 2: batch + baseline
+IF_baseline = 3 # 0: reweight + batch ; 1: baseline; 2: batch + baseline
 IF_figure = 0
 
 parser = config_parser()
@@ -45,9 +46,10 @@ class NotearsMLP(nn.Module):
         for l in range(len(dims) - 2):
             layers.append(LocallyConnected(d, dims[l + 1], dims[l + 2], bias=bias))
         self.fc2 = nn.ModuleList(layers) 
-        
+        layers = []
         # TODO: add the discriminator function for wasserstein loss
-        
+        layers.append(LocallyConnected(d, d, 1, bias=bias))
+        self.fc3 = nn.ModuleList(layers)
         
 
     def _bounds(self):
@@ -72,6 +74,20 @@ class NotearsMLP(nn.Module):
         x = x.squeeze(dim=2)  # [n, d] 
         return x
 
+    def forward__(self, x):  # [n, d] -> [n, d]
+        W = 1 - torch.eye (x.shape [1])
+        W = W.reshape (1, W.shape [0], -1).expand (x.shape [0], -1, -1) 
+        x = x.reshape (x.shape [0], 1, -1).expand (-1, x.shape [1], -1) 
+        x = x * W 
+        for _, fc in enumerate (self.fc3) :
+            if _ != 0 : 
+                x = torch.relu (x)  # [n, d, m1]
+            #else :
+                #x = torch.nn.functional.dropout (x, 0.5)
+            x = fc(x)  # [n, d, m2]
+        x = x.squeeze(dim=2)  # [n, d]
+        return x
+    
     def h_func(self):
         """Constrain 2-norm-squared of fc1 weights along m1 dim to be a DAG"""
         d = self.dims[0]
@@ -94,6 +110,13 @@ class NotearsMLP(nn.Module):
             reg += torch.sum(fc.weight ** 2)
         return reg 
 
+    def l2_reg__(self):
+        """Take 2-norm-squared of all parameters in Discriminator """
+        reg = 0.
+        for fc in self.fc3:
+            reg += torch.sum(fc.weight ** 2)
+        return reg
+    
     def fc1_l1_reg(self):
         """Take l1 norm of fc1 weight"""
         reg = torch.sum(self.fc1_pos.weight + self.fc1_neg.weight)
@@ -117,14 +140,31 @@ def adaptive_loss(output, target, reweight_list):
     loss = 0.5 * torch.sum(torch.mul(reweight_list, R**2))
     return loss
 
-
+# TODO: we need to pay attention to the axis of the average
+def wasserstein_loss(x_distribution, wx_distribution):
+    return (torch.mean(x_distribution, axis = 0) - torch.mean(wx_distribution, axis = 0)).sum()
     
 def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, adp_flag, adaptive_model):
     """Perform one step of dual ascent in augmented Lagrangian."""
     h_new = None
     optimizer = LBFGSBScipy(model.parameters())
+    optimizer__ = optim.SGD (model.fc3.parameters (), lr = 1e-2, momentum = 0.9)
     # X_torch = torch.from_numpy(X)
     while rho < rho_max:
+        def closure__():
+            optimizer__.zero_grad()
+            primal_obj = torch.tensor(0.).to(args.device)
+            
+            for _ , tmp_x in enumerate(train_loader):
+                batch_x = tmp_x[0].to(args.device)
+                x_distribution = model.forward__(batch_x)
+                wx_distribution = model.forward__(model(batch_x))
+                primal_obj += -wasserstein_loss(x_distribution, wx_distribution)
+            
+            l2_reg = 10 * 0.5 * lambda2 * model.l2_reg__ ()
+            primal_obj += l2_reg
+            primal_obj.backward ()
+            return primal_obj
         
         def closure():
             global COUNT
@@ -196,24 +236,35 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
         
         def w_closure():
             global COUNT
+            if COUNT % 2 == 0 :
+                for i in range (1) :
+                    LLL = closure__()
+                    optimizer__.step ()
+                    for p in model.fc3.parameters():
+                        p.data.clamp_(-0.01, 0.01)
             COUNT += 1
             optimizer.zero_grad()
 
             primal_obj = torch.tensor(0.).to(args.device)
-            loss = torch.tensor(0.).to(args.device)
+            loss_D = torch.tensor(0.).to(args.device)
 
             for _ , tmp_x in enumerate(train_loader):
                 batch_x = tmp_x[0].to(args.device)
                 X_hat = model(batch_x)
                 primal_obj += squared_loss(X_hat, batch_x)
-            
+                x_distribution = model.forward__(batch_x)
+                wx_distribution = model.forward__(model(batch_x))
+                loss_D += wasserstein_loss(x_distribution, wx_distribution)
+                
             h_val = model.h_func()
             penalty = 0.5 * rho * h_val * h_val + alpha * h_val
             l2_reg = 0.5 * lambda2 * model.l2_reg()
             l1_reg = lambda1 * model.fc1_l1_reg()
-            primal_obj += penalty + l2_reg + l1_reg
+            primal_obj += penalty + l2_reg + l1_reg + 0.01 * loss_D
             primal_obj.backward()
             
+            for p in model.fc3.parameters () :
+                p.grad.zero_ ()
             return primal_obj
         
         if IF_baseline == 1:
@@ -222,6 +273,8 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             optimizer.step(r_closure)
         elif IF_baseline == 2:
             optimizer.step(batch_closure)
+        elif IF_baseline == 3:
+            optimizer.step(w_closure)
 
         with torch.no_grad():
             h_new = model.h_func().item()
