@@ -23,12 +23,13 @@ from sachs_data.load_sachs import *
 import torch.optim as optim
 
 COUNT = 0
-IF_baseline = 3 # 0: reweight + batch ; 1: baseline; 2: batch + baseline
+
 IF_figure = 0
 
 parser = config_parser()
 args = parser.parse_args()
 print(args)
+run_mode = args.run_mode # 0: reweight + batch ; 1: baseline; 2: batch + baseline
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
         super(NotearsMLP, self).__init__()
@@ -150,11 +151,11 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
     """Perform one step of dual ascent in augmented Lagrangian."""
     h_new = None
     optimizer = LBFGSBScipy(model.parameters())
-    optimizer__ = optim.SGD (model.fc3.parameters (), lr = 1e-2, momentum = 0.9)
+    space_optimizer = optim.RMSprop (model.fc3.parameters (), lr = 1e-2, momentum = 0.9)
     # X_torch = torch.from_numpy(X)
     while rho < rho_max:
         def closure__():
-            optimizer__.zero_grad()
+            space_optimizer.zero_grad()
             primal_obj = torch.tensor(0.).to(args.device)
             
             for _ , tmp_x in enumerate(train_loader):
@@ -238,12 +239,12 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
         
         def w_closure():
             global COUNT
-            if COUNT % 2 == 0 :
+            if COUNT % args.iter_mod == 0 :
                 for i in range (1) :
                     LLL = closure__()
-                    optimizer__.step ()
+                    space_optimizer.step ()
                     for p in model.fc3.parameters():
-                        p.data.clamp_(-0.01, 0.01)
+                        p.data.clamp_(-args.clip, args.clip)
             COUNT += 1
             optimizer.zero_grad()
 
@@ -253,10 +254,10 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             for _ , tmp_x in enumerate(train_loader):
                 batch_x = tmp_x[0].to(args.device)
                 X_hat = model(batch_x)
-                primal_obj += squared_loss(X_hat, batch_x)
                 x_distribution = model.forward__(batch_x)
                 wx_distribution = model.forward__(model(batch_x))
                 loss_D += wasserstein_loss(x_distribution, wx_distribution)
+                primal_obj += squared_loss(X_hat, batch_x)
                 # if COUNT % 10 == 0:
                 #     print(loss_D)
             h_val = model.h_func()
@@ -270,13 +271,13 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
                 p.grad.zero_ ()
             return primal_obj
         
-        if IF_baseline == 1:
+        if run_mode == 1:
             optimizer.step(closure)  # NOTE: updates model in-place
-        elif IF_baseline == 0 :                        # NOTE: the adaptive reweight operation
+        elif run_mode == 0 :                        # NOTE: the adaptive reweight operation
             optimizer.step(r_closure)
-        elif IF_baseline == 2:
+        elif run_mode == 2:
             optimizer.step(batch_closure)
-        elif IF_baseline == 3:
+        elif run_mode == 3:
             optimizer.step(w_closure)
 
         with torch.no_grad():
@@ -306,7 +307,7 @@ def notears_nonlinear(model: nn.Module,
         if j > args.reweight_epoch:
             # TODO: reweight operation here
             adp_flag = True
-            if IF_baseline==0:
+            if run_mode==0:
                 print("Re-weighting")
                 reweight_idx_tmp = adap_reweight_step(adaptive_model, train_loader, args.adaptive_lambda , model, args.adaptive_epoch, args.adaptive_lr)
                 
@@ -398,9 +399,9 @@ def main():
 
     if args.data_type == 'synthetic':
         with open(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/seed_{args.seed}.txt', 'a') as f:
-            f.write(f'ifbaseline: {IF_baseline}\n')
-            if not IF_baseline:
-                f.write(f'temperature: {args.temperature}\n')
+            f.write(f'run_mode: {run_mode}\n')
+            f.write(f'without tuning \n')
+            if not run_mode:
                 f.write(f'batch_size:{args.batch_size}\n')
             f.write(f'dataset_type:{args.data_type}\n')
             f.write(f'acc:{acc}\n')
