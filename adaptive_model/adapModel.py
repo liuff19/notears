@@ -38,8 +38,8 @@ class adaptiveMLP(nn.Module):
         # x = self.sigmoid(x)
         # x = x - torch.mean(x)
         # x = x / torch.std(x)
-        # gumble_G = torch.rand(x.shape[0],1)
-        # x = x - torch.log(-torch.log(gumble_G))
+        gumble_G = torch.rand(x.shape[0],1)
+        x = x - torch.log(-torch.log(gumble_G))
         x = self.softmax_temp(x/self.t)
         # x = torch.abs(x)
         # x = x/torch.sum(x)
@@ -77,7 +77,7 @@ def adap_reweight_step(adp_model, train_loader, lambda1, notears_model, epoch_nu
             reweight_list = adp_model(R**2) # FIXME: 注意这里的输入和在主函数训练的输入的一致性，要么都是R,要么都是X
             # loss 要加上了l1正则项
             
-            loss = -0.5*torch.sum(torch.mul(reweight_list, R**2)) + lambda1*adp_model.adaptive_l2_reg() + 0.02*torch.sum((reweight_list- (gumble_G))**2)
+            loss = -0.5*torch.sum(torch.mul(reweight_list, R**2)) + lambda1*adp_model.adaptive_l2_reg()
             loss.backward()
             optimizer.step()
             loop.set_postfix(adaptive_loss=loss.item())
