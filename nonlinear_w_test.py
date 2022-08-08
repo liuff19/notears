@@ -21,14 +21,14 @@ from runhelps.runhelper import config_parser
 from torch.utils.tensorboard import SummaryWriter
 from sachs_data.load_sachs import *
 import torch.optim as optim
-
+import optuna
 COUNT = 0
 
 IF_figure = 0
 
 parser = config_parser()
 args = parser.parse_args()
-print(args)
+args.run_mode = 3
 run_mode = args.run_mode # 0: reweight + batch ; 1: baseline; 2: batch + baseline
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
@@ -147,11 +147,11 @@ def wasserstein_loss(x_distribution, wx_distribution):
     # TODO: check the correctness of the loss function
     return (torch.mean(x_distribution, axis = 0) - torch.mean(wx_distribution, axis = 0)).sum()
     
-def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, adp_flag, adaptive_model):
+def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rho_max, space_lr, clip):
     """Perform one step of dual ascent in augmented Lagrangian."""
     h_new = None
     optimizer = LBFGSBScipy(model.parameters())
-    space_optimizer = optim.RMSprop (model.fc3.parameters (), lr = 1e-2, momentum = 0.9)
+    space_optimizer = optim.RMSprop (model.fc3.parameters (), lr = space_lr, momentum = 0.9)
     # X_torch = torch.from_numpy(X)
     while rho < rho_max:
         def closure__():
@@ -181,38 +181,6 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             l1_reg = lambda1 * model.fc1_l1_reg()
             primal_obj = loss + penalty + l2_reg + l1_reg
             primal_obj.backward()
-            return primal_obj
-
-        def r_closure():
-            global COUNT
-            COUNT += 1
-            optimizer.zero_grad()
-
-            primal_obj = torch.tensor(0.).to(args.device)
-            loss = torch.tensor(0.).to(args.device)
-
-            for _ , tmp_x in enumerate(train_loader):
-                batch_x = tmp_x[0].to(args.device)
-                X_hat = model(batch_x)
-            
-                if adp_flag == False:
-                    reweight_list = torch.ones(batch_x.shape[0],1)/batch_x.shape[0]
-                    reweight_list = reweight_list.to(args.device)
-                else:
-                    with torch.no_grad():
-                        model.eval()
-                        reweight_list = adaptive_model((batch_x-X_hat)**2)
-                    model.train()
-                # print(reweight_list.squeeze(1))
-                primal_obj += adaptive_loss(X_hat, batch_x, reweight_list)
-            
-            h_val = model.h_func()
-            penalty = 0.5 * rho * h_val * h_val + alpha * h_val
-            l2_reg = 0.5 * lambda2 * model.l2_reg()
-            l1_reg = lambda1 * model.fc1_l1_reg()
-            primal_obj += penalty + l2_reg + l1_reg
-            primal_obj.backward()
-
             return primal_obj
         
         def batch_closure():
@@ -244,7 +212,7 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
                     LLL = closure__()
                     space_optimizer.step ()
                     for p in model.fc3.parameters():
-                        p.data.clamp_(-args.clip, args.clip)
+                        p.data.clamp_(-clip, clip)
             COUNT += 1
             optimizer.zero_grad()
 
@@ -273,8 +241,6 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
         
         if run_mode == 1:
             optimizer.step(closure)  # NOTE: updates model in-place
-        elif run_mode == 0 :                        # NOTE: the adaptive reweight operation
-            optimizer.step(r_closure)
         elif run_mode == 2:
             optimizer.step(batch_closure)
         elif run_mode == 3:
@@ -304,18 +270,8 @@ def notears_nonlinear(model: nn.Module,
     rho, alpha, h = 1.0, 0.0, np.inf
     adp_flag = False
     for j in tqdm.tqdm(range(max_iter)):
-        if j > args.reweight_epoch:
-            # TODO: reweight operation here
-            adp_flag = True
-            if run_mode==0:
-                print("Re-weighting")
-                reweight_idx_tmp = adap_reweight_step(adaptive_model, train_loader, args.adaptive_lambda , model, args.adaptive_epoch, args.adaptive_lr)
-                
-            rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
-                                         rho, alpha, h, rho_max, adp_flag, adaptive_model)
-        else:
-            rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
-                                         rho, alpha, h, rho_max, adp_flag, adaptive_model)
+        rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
+                                         rho, alpha, h, rho_max, args.space_lr, args.clip)
         
         if h <= h_tol or rho >= rho_max:
             break
@@ -331,24 +287,9 @@ def set_random_seed(seed):
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
 
-def hard_mining(data, model, loss_func, ratio = 0.01):
-    """
-    data: (N_observations, nodes)
-    """
-    N_sample = data.shape[0]
-    model.eval()
-    data_hat = model(data)
-    loss_col = loss_func(data_hat, data)
-    loss_col = torch.sum(loss_col, dim=1)
-    loss_col = loss_col.cpu().detach().numpy()
-    # 找出最大ratio的loss_col的index
-    hard_index_list = np.argsort(loss_col)[::-1][:int(N_sample * ratio)]
-    easy_index_list = np.argsort(loss_col)[:int(N_sample * ratio)]
-    return hard_index_list, easy_index_list
 
-def main():
+def main(args):
     # fangfu
-
     print('==' * 20)
 
     import notears.utils as ut
@@ -409,8 +350,26 @@ def main():
     
     if args.reweight:
         print('reweighting')
+    
+    return acc["shd"]
 
+def objective(trial):
+    parser = config_parser()
+    args = parser.parse_args()
+    args.space_lr = trial.suggest_float('space_lr', 1e-5, 1e-2)
+    args.clip = trial.suggest_float('clip', 0.01, 1)
+    return main(args)
+    
+    
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
     torch.set_printoptions(precision=10)
-    main()
+    parser = config_parser()
+    args = parser.parse_args()
+    # args.run_mode =100
+    # x = main(args)
+    # print(x)
+    
+    study = optuna.create_study(study_name='space_param',direction="minimize",storage='sqlite:///db.sqlite3')  
+    study.optimize(objective, n_trials=20) 
+    print("Best value: {} \n".format(study.best_value))
