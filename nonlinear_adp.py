@@ -325,12 +325,12 @@ def main():
     print(acc)
     # 根据args.d和args.s0生成文件夹
     import os
-    if not os.path.exists(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}'):
-        os.makedirs(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}')
+    if not os.path.exists(f'reweight_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}'):
+        os.makedirs(f'reweight_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}')
     # 创建该'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/{args.seed}.txt'该文件
 
     if args.data_type == 'synthetic':
-        with open(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/seed_{args.seed}.txt', 'a') as f:
+        with open(f'reweight_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/seed_{args.seed}.txt', 'a') as f:
             f.write(f'ifbaseline: {IF_baseline}\n')
             if not IF_baseline:
                 f.write(f'temperature: {args.temperature}\n')
