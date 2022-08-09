@@ -22,11 +22,12 @@ from torch.utils.tensorboard import SummaryWriter
 from sachs_data.load_sachs import *
 
 COUNT = 0
-IF_baseline = 0
+
 IF_figure = 0
 
 parser = config_parser()
 args = parser.parse_args()
+IF_baseline = args.run_mode
 print(args)
 class NotearsMLP(nn.Module):
     def __init__(self, dims, bias=True):
@@ -331,7 +332,8 @@ def main():
 
     if args.data_type == 'synthetic':
         with open(f'reweight_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/seed_{args.seed}.txt', 'a') as f:
-            f.write(f'ifbaseline: {IF_baseline}\n')
+            f.write(f'run_mode: {IF_baseline}\n')
+            f.write(f'observation_num: {args.n}\n')
             if not IF_baseline:
                 f.write(f'temperature: {args.temperature}\n')
                 f.write(f'batch_size:{args.batch_size}\n')
