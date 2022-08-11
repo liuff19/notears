@@ -393,22 +393,20 @@ def main():
     print(acc)
     # 根据args.d和args.s0生成文件夹
     import os
-    if not os.path.exists(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}'):
-        os.makedirs(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}')
+    if not os.path.exists(f'wasserstein/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}'):
+        os.makedirs(f'wasserstein/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}')
     # 创建该'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/{args.seed}.txt'该文件
 
     if args.data_type == 'synthetic':
-        with open(f'my_experiment/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/seed_{args.seed}.txt', 'a') as f:
+        with open(f'wasserstein/{args.d}_{args.s0}/{args.graph_type}_{args.sem_type}/seed_{args.seed}.txt', 'a') as f:
             f.write(f'run_mode: {run_mode}\n')
+            f.write(f'observation_num: {args.n}\n')
             f.write(f'without tuning \n')
             if not run_mode:
                 f.write(f'batch_size:{args.batch_size}\n')
             f.write(f'dataset_type:{args.data_type}\n')
             f.write(f'acc:{acc}\n')
             f.write('-----------------------------------------------------\n')
-    
-    if args.reweight:
-        print('reweighting')
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
