@@ -402,8 +402,8 @@ def main():
             f.write(f'run_mode: {run_mode}\n')
             f.write(f'observation_num: {args.n}\n')
             f.write(f'without tuning \n')
-            if not run_mode:
-                f.write(f'batch_size:{args.batch_size}\n')
+            if args.run_mode==3:
+                f.write(f'batch_size: {args.batch_size}\n')
             f.write(f'dataset_type:{args.data_type}\n')
             f.write(f'acc:{acc}\n')
             f.write('-----------------------------------------------------\n')
