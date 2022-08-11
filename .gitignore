@@ -108,3 +108,5 @@ logs
 runhelps
 .gitignore
 my_experiment
+gp_result
+reweight_experiment
