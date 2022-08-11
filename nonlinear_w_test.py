@@ -356,8 +356,10 @@ def main(args):
 def objective(trial):
     parser = config_parser()
     args = parser.parse_args()
-    args.space_lr = trial.suggest_float('space_lr', 1e-5, 1e-2)
+    args.batch_size = trial.suggest_int('batch_size', 300,800)
+    args.space_lr = trial.suggest_float('space_lr', 1e-5, 1e-1)
     args.clip = trial.suggest_float('clip', 0.01, 1)
+    args.iter_mode = trial.suggest_int('iter_mode', 2,10)
     return main(args)
     
     
@@ -367,9 +369,9 @@ if __name__ == '__main__':
     parser = config_parser()
     args = parser.parse_args()
     # args.run_mode =100
-    # x = main(args)
-    # print(x)
+    x = main(args)
+    print(x)
     
     study = optuna.create_study(study_name='space_param',direction="minimize",storage='sqlite:///db.sqlite3')  
-    study.optimize(objective, n_trials=20) 
+    study.optimize(objective, n_trials=100) 
     print("Best value: {} \n".format(study.best_value))
