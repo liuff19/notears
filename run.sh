@@ -1,34 +1,45 @@
 #!/bin/bash
-for seed in {0..10}
+
+for d in {10,15}
 do
-    for run_mode in {1,3}
+    for multiplier in {2,3,4}
     do
-        for d in {10}
+        for seed in {0..10}
         do
-            for multiplier in {2,3,4}
+            for mode in {1,3}
             do
+                # for n in {1000}
+                # do 
+                n=1000
+                batch=200
                 s0=$(($d*$multiplier))
                 sem_type="gp"
                 graph_type="ER"
-                python nonlinear_w.py --s0 ${s0} --d ${d} --sem_type ${sem_type} --graph_type ${graph_type} --run_mode ${run_mode}
+                python nonlinear_w.py --s0 ${s0} --d ${d} --sem_type ${sem_type} --graph_type ${graph_type} --seed ${seed} --batch_size ${batch} --run_mode ${mode} --n ${n}
+                # done 
             done
         done
     done
 done
 
-for seed in {0..10}
+
+for d in {10,15}
 do
-    for run_mode in {1,3}
+    for multiplier in {2,3,4}
     do
-        for d in {20,30,40}
+        for seed in {0..10}
         do
-            for multiplier in {2,3,4}
+            for mode in {1,3}
             do
-                batch_size=500
+                # for n in {1000}
+                # do 
+                n=1000
+                batch=200
                 s0=$(($d*$multiplier))
                 sem_type="gp"
-                graph_type="ER"
-                python nonlinear_w.py --s0 ${s0} --d ${d} --sem_type ${sem_type} --graph_type ${graph_type} --run_mode ${run_mode} --batch_size ${batch_size}
+                graph_type="SF"
+                python nonlinear_w.py --s0 ${s0} --d ${d} --sem_type ${sem_type} --graph_type ${graph_type} --seed ${seed} --batch_size ${batch} --run_mode ${mode} --n ${n}
+                # done 
             done
         done
     done
