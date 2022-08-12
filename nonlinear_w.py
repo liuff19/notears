@@ -21,7 +21,7 @@ from runhelps.runhelper import config_parser
 from torch.utils.tensorboard import SummaryWriter
 from sachs_data.load_sachs import *
 import torch.optim as optim
-
+import torch.nn.functional as F
 COUNT = 0
 
 IF_figure = 0
@@ -51,7 +51,6 @@ class NotearsMLP(nn.Module):
         # TODO: add the discriminator function for wasserstein loss
         layers.append(LocallyConnected(d, d, 1, bias=bias))
         self.fc3 = nn.ModuleList(layers)
-        
 
     def _bounds(self):
         d = self.dims[0]
@@ -241,7 +240,7 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
             global COUNT
             if COUNT % args.iter_mod == 0 :
                 # TODO: add the h_func to control the clip args
-                
+                args.clip = torch.sigmoid(model.h_func())
                 for i in range (1) :
                     LLL = closure__()
                     space_optimizer.step ()
