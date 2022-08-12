@@ -240,6 +240,8 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
         def w_closure():
             global COUNT
             if COUNT % args.iter_mod == 0 :
+                # TODO: add the h_func to control the clip args
+                
                 for i in range (1) :
                     LLL = closure__()
                     space_optimizer.step ()
@@ -261,6 +263,7 @@ def dual_ascent_step(model, X, train_loader, lambda1, lambda2, rho, alpha, h, rh
                 # if COUNT % 10 == 0:
                 #     print(loss_D)
             h_val = model.h_func()
+            # print(h_val)
             penalty = 0.5 * rho * h_val * h_val + alpha * h_val
             l2_reg = 0.5 * lambda2 * model.l2_reg()
             l1_reg = lambda1 * model.fc1_l1_reg()
@@ -304,17 +307,7 @@ def notears_nonlinear(model: nn.Module,
     rho, alpha, h = 1.0, 0.0, np.inf
     adp_flag = False
     for j in tqdm.tqdm(range(max_iter)):
-        if j > args.reweight_epoch:
-            # TODO: reweight operation here
-            adp_flag = True
-            if run_mode==0:
-                print("Re-weighting")
-                reweight_idx_tmp = adap_reweight_step(adaptive_model, train_loader, args.adaptive_lambda , model, args.adaptive_epoch, args.adaptive_lr)
-                
-            rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
-                                         rho, alpha, h, rho_max, adp_flag, adaptive_model)
-        else:
-            rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
+        rho, alpha, h = dual_ascent_step(model, X, train_loader, lambda1, lambda2,
                                          rho, alpha, h, rho_max, adp_flag, adaptive_model)
         
         if h <= h_tol or rho >= rho_max:
