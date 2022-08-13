@@ -38,7 +38,7 @@ def config_parser():
     # TODO: add arguments for wasserstein loss
     parser.add_argument('--run_mode', type = int, default=3, help=' 0: reweight + batch ; 1: baseline; 2: batch + baseline; 3: wasserstein')
     parser.add_argument('--iter_mod', type= int, default = 2, help='the iteration mod for wassertein')
-    parser.add_argument('--clip', type= int, default =0.01, help='the clip for Lipshitz')
+    parser.add_argument('--clip', type= float, default =0.01, help='the clip for Lipshitz')
     parser.add_argument('--space_lr', type=int, default =0.001, help='the learning rate of space optimizer')
     
     return parser
