@@ -5,6 +5,7 @@ do
     do
         for mode in {1,3}
         do
+            batch=200
             n=1000
             d=10
             s0=$(($d*$multiplier))
@@ -21,6 +22,7 @@ do
     do
         for mode in {1,3}
         do
+            batch=200
             n=1000
             d=10
             s0=$(($d*$multiplier))
