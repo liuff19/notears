@@ -9,7 +9,7 @@ do
             n=1000
             d=10
             s0=$(($d*$multiplier))
-            sem_type="gp"
+            sem_type="mlp"
             graph_type="ER"
             python nonlinear_w.py --s0 ${s0} --d ${d} --sem_type ${sem_type} --graph_type ${graph_type} --seed ${seed} --batch_size ${batch} --run_mode ${mode} --n ${n}
         done
@@ -26,7 +26,7 @@ do
             n=1000
             d=10
             s0=$(($d*$multiplier))
-            sem_type="gp"
+            sem_type="mlp"
             graph_type="SF"
             python nonlinear_w.py --s0 ${s0} --d ${d} --sem_type ${sem_type} --graph_type ${graph_type} --seed ${seed} --batch_size ${batch} --run_mode ${mode} --n ${n}
         done
